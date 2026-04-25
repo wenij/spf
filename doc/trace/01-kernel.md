@@ -3,6 +3,8 @@
 > 對應原始碼：`spf_defkern.f`、`spf_forthproc.f`、`spf_forthproc_hl.f`、`spf_floatkern.f`
 > 原始碼版權：Copyright [C] 1992-1999 A.Cherezov ac@forth.org
 
+> 若你對 IA-32 組語、`CODE ... END-CODE`、`C,` / `,` 這類 SP-Forth assembler 寫法還不熟，建議先讀 [08-append-a.md](08-append-a.md) 再回來。
+
 ---
 
 ## 1. Forth 虛擬機器架構
