@@ -429,6 +429,148 @@ Windows 版不像 POSIX 那樣從頭建立 ELF 檔案，而是：
 ;
 ```
 
+### 7.4 PE 匯入表（Import Table）詳細結構
+
+PE 的匯入表是作業系統載入器解析外部 DLL 函數位址的核心機制。與 ELF 使用重定位表不同，PE 使用專門的匯入目錄結構。
+
+#### 7.4.1 匯入表整體架構
+
+匯入表位於 `.idata` 節區，包含以下並行陣列結構：
+
+```
+.idata 節區佈局：
+┌────────────────────────────────────────┐
+│ Import Directory Table                 │
+│  每個 DLL 一個項目（20 bytes）           │
+│  - Import Lookup Table RVA             │
+│  - TimeDateStamp                       │
+│  - ForwarderChain                      │
+│  - Name RVA（指向 DLL 名稱）             │
+│  - Import Address Table RVA            │
+├────────────────────────────────────────┤
+│ Import Lookup Table（ILT）/            │
+│ Import Name Table（INT）               │
+│  函數序號或名稱指標陣列                   │
+├────────────────────────────────────────┤
+│ Import Address Table（IAT）            │
+│  執行時填入實際函數位址                   │
+├────────────────────────────────────────┤
+│ Hint/Name Table                        │
+│  函數名稱字串（含 Hint 序號提示）          │
+├────────────────────────────────────────┤
+│ DLL 名稱字串                           │
+│  如 "KERNEL32.dll\0"                    │
+└────────────────────────────────────────┘
+```
+
+#### 7.4.2 Import Directory Table 項目
+
+每個被匯入的 DLL 對應一個 20-byte 的目錄項目：
+
+| 偏移 | 大小 | 欄位名稱 | 說明 |
+|------|------|----------|------|
+| 0x00 | 4 | ImportLookupTableRVA | 指向 ILT/INT 的 RVA |
+| 0x04 | 4 | TimeDateStamp | 時間戳（0 = 未繫結） |
+| 0x08 | 4 | ForwarderChain | 轉發鏈索引（-1 = 無轉發） |
+| 0x0C | 4 | NameRVA | 指向 DLL 名稱字串的 RVA |
+| 0x10 | 4 | ImportAddressTableRVA | 指向 IAT 的 RVA（執行時由載入器填入） |
+
+**SP-Forth 使用的兩個 DLL**：
+
+SP-Forth 最小執行檔通常只匯入 `KERNEL32.dll` 的兩個函數：
+- `LoadLibraryA`：載入其他 DLL
+- `GetProcAddress`：取得函數位址
+
+這兩個函數是 SP-Forth 動態連結的基礎，其他所有 Win32 API 都在執行時透過它們動態載入。
+
+#### 7.4.3 Import Lookup Table / Import Name Table
+
+每個項目 4 bytes，最高位元決定類型：
+
+- **最高位元 = 1**：按序號（Ordinal）匯入
+  - 低 31 bits = 函數序號（Ordinal Number）
+  - 範例：`0x8000012F` = 序號 303
+
+- **最高位元 = 0**：按名稱匯入
+  - 指向 Hint/Name Table 的 RVA
+  - 範例：`0x0000203A` = 指向檔案偏移 0x203A 的 Hint/Name 結構
+
+**SP-Forth 範例**：
+
+```forth
+\ spf_stub.f 中的匯入表定義
+CREATE ImportDirectory
+  \ Import Lookup Table
+  HERE ImportDirectory - 1000 + ImportDirectory ID.ImportLookupTableRVA !
+  0 ,    \ LoadLibraryA：初始為 0，按名稱匯入（指向 Hint/Name）
+  0 ,    \ GetProcAddress：初始為 0，按名稱匯入
+  0 ,    \ 結束項目（NULL）
+```
+
+#### 7.4.4 Hint/Name Table 結構
+
+按名稱匯入時，ILT/INT 項目指向此結構：
+
+```
+┌──────────┬────────────────────┐
+│ 2 bytes  │ Hint（匯出表索引提示） │
+│          │ 載入器先用此值快速查找 │
+├──────────┼────────────────────┤
+│ N bytes  │ 函數名稱（ASCIIZ）    │
+│          │ 如 "LoadLibraryA\0"  │
+├──────────┼────────────────────┤
+│ 0-3 bytes│ 對齊填充（到 2-byte 邊界）│
+└──────────┴────────────────────┘
+```
+
+**Hint 的作用**：
+- DLL 的匯出表是一個有序陣列
+- Hint 建議載入器從哪個索引開始搜尋
+- 如果 Hint 正確，載入器無需字串比對即可找到函數
+- 如果 Hint 過時（DLL 版本不同），載入器回退到線性搜尋
+
+#### 7.4.5 Import Address Table（IAT）
+
+IAT 與 ILT/INT 平行，但在執行時被覆寫：
+
+| 階段 | IAT 內容 | 說明 |
+|------|----------|------|
+| 檔案中的初始值 | 與 ILT 相同 | 指向 Hint/Name 的 RVA |
+| 載入後 | 函數的實際位址 | 如 `0x76E31234` = LoadLibraryA 位址 |
+
+**SP-Forth 的動態解析**：
+
+```forth
+\ spf_win_api.f:18-44
+CODE AO_INI
+  \ ...
+  A; 0xA1 C, AddrOfLoadLibrary
+  ALSO FORTH , PREVIOUS
+  A; HERE 4 - ' AOLL EXECUTE !
+  CALL EAX          ; 呼叫 LoadLibraryA
+  
+  PUSH ECX
+  PUSH EAX
+  A; 0xA1 C, AddrOfGetProcAddress
+  ALSO FORTH , PREVIOUS
+  A; HERE 4 - ' AOGPA EXECUTE !
+  CALL EAX          ; 呼叫 GetProcAddress
+  \ ...
+END-CODE
+```
+
+`AO_INI` 在啟動時解析 `LoadLibraryA` 和 `GetProcAddress` 的位址，並儲存到 `AOLL` 和 `AOGPA` 變數。這與 ELF 的延遲解析（lazy resolution）不同，PE 版本在啟動時就解析這兩個核心函數。
+
+#### 7.4.6 PE vs ELF 動態連結對照
+
+| 特性 | ELF（POSIX） | PE（Windows） |
+|------|--------------|---------------|
+| 匯入資訊位置 | `.dynsym`、`.dynstr`、`.rel.dyn` | `.idata`（匯入表） |
+| 函數解析時機 | 延遲解析（lazy binding，首次呼叫時） | 啟動時解析（EAGER） |
+| 解析機制 | PLT/GOT（Procedure Linkage Table） | IAT（Import Address Table） |
+| 延遲解析控制 | `LD_BIND_NOW` 環境變數 | 無（總是啟動時解析） |
+| SP-Forth 實作 | `dl-init` + `symbol-address` | `AO_INI` 直接呼叫 `LoadLibraryA`/`GetProcAddress` |
+
 ---
 
 ## 8. 模組路徑管理（spf_win_module.f）
