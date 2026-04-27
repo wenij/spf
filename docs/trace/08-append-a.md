@@ -2,6 +2,8 @@
 
 > 對應原始碼：`lib/ext/spf-asm.f`、`lib/asm/486asm.f`、`src/spf_defkern.f`、`src/spf_forthproc.f`、`src/compiler/spf_compile.f`、`src/tc_spf.F`、`src/posix/api.f`
 
+> 本章目標：看懂 SP-Forth 原始碼中的 CODE 定義、C, 位元組組裝、以及 LEA 的位址運算技巧。
+> 
 > 閱讀定位：這一章是 **kernel 開發前的組語暖身**。如果你對 IA-32/x86 組語、`CODE ... END-CODE`、`C,` / `,` 這類寫法還不熟，建議先讀完本章，再進入 [01-kernel.md](01-kernel.md)。
 
 ---

@@ -200,7 +200,7 @@ spf.f
   │   ├── spf_read_source.f       ← 原始碼讀取
   │   ├── spf_nonopt.f             ← 非最佳化字
   │   ├── spf_compile0.f           ← 記憶體管理
-  │   ├── src/macroopt.f 或 src/noopt.f（取決於 `BUILD-OPTIMIZER`；這是第二次載入，詳見 [07-optimizer.md](07-optimizer.md) §1.2）
+  │   ├── src/macroopt.f 或 src/noopt.f（取決於 `BUILD-OPTIMIZER`；這是第二次載入，詳見 [07-optimizer.md](07-optimizer.md) §1.3）
   │   ├── spf_compile.f            ← 主要編譯器
   │   ├── spf_wordlist.f           ← 詞彙表
   │   ├── spf_find.f               ← 搜尋引擎（內部再 `INCLUDED` `spf_find_cdr.f`）

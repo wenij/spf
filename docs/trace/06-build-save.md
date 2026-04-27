@@ -1,5 +1,7 @@
 # SP-Forth/4 原始碼追蹤 — 建構系統、映像儲存與輔助檔案
 
+> 本章目標：了解 spf4orig 如何自舉編譯出 spf4，ELF .o 如何產生，以及 SAVE / XSAVE 的流程差異。
+> 
 > 對應原始碼：`Makefile`、`posix/Makefile`、`posix/config.c`、`posix/config.auto.f`、
 > `spf_compileoptions.f`、`spf_stub.f`、`spf_date.f`、`spf_xmlhelp.f`、
 > `elf.f`、`xsave.f`、`posix/save.f`、`tsave.f`、`done.f`、`spf.f`（主控腳本）
@@ -551,21 +553,50 @@ XML 說明模式會重新定義 `INCLUDED` 和 `REQUIRE`：
 
 ## 6. ELF 映像格式（elf.f）
 
-### 6.1 ELF 段表結構
+### 6.1 ELF 段表（Section Table）結構
 
-`elf.f` 定義了 ELF 可重定位物件檔的完整結構，包含 9 個段：
+`elf.f` 定義了 ELF 可重定位物件檔的完整結構，包含 9 個**節區**（Section）：
 
-| 段號 | 名稱 | 類型 | 旗標 | 說明 |
-|------|------|------|------|------|
-| 0 | （無） | SHT_NULL | 0 | 保留的零段 |
-| 1 | `.shstrtab` | SHT_STRTAB | 0 | 段名稱字串表 |
+| 節區號 | 名稱 | 類型 | 旗標 | 說明 |
+|--------|------|------|------|------|
+| 0 | （無） | SHT_NULL | 0 | 保留的零節區 |
+| 1 | `.shstrtab` | SHT_STRTAB | 0 | 節區名稱字串表 |
 | 2 | `.strtab` | SHT_STRTAB | 0 | 符號名稱字串表 |
 | 3 | `.symtab` | SHT_SYMTAB | 0 | 符號表 |
 | 4 | `.rel.forth` | SHT_REL | 0 | 重定位表 |
-| 5 | `.forth` | SHT_PROGBITS | SHF_WRITE+SHF_ALLOC+SHF_EXECINSTR (0x7) | Forth 程式碼段 |
-| 6 | `.space` | SHT_NOBITS | SHF_WRITE+SHF_ALLOC+SHF_EXECINSTR (0x7) | 字典空間段（BSS） |
-| 7 | `.dltable` | SHT_PROGBITS | SHF_WRITE+SHF_ALLOC (0x3) | 動態連結表段 |
-| 8 | `.dlstrings` | SHT_STRTAB | SHF_ALLOC (0x2) | 動態連結字串段 |
+| 5 | `.forth` | SHT_PROGBITS | SHF_WRITE+SHF_ALLOC+SHF_EXECINSTR (0x7) | Forth 程式碼節區 |
+| 6 | `.space` | SHT_NOBITS | SHF_WRITE+SHF_ALLOC+SHF_EXECINSTR (0x7) | 字典空間節區（BSS） |
+| 7 | `.dltable` | SHT_PROGBITS | SHF_WRITE+SHF_ALLOC (0x3) | 動態連結表節區 |
+| 8 | `.dlstrings` | SHT_STRTAB | SHF_ALLOC (0x2) | 動態連結字串節區 |
+
+#### 6.1.1 Section（節區）vs Segment（段）的區別
+
+ELF 檔案有兩種檢視方式，使用不同的組織單位：
+
+**連結檢視（Linking View）— 使用節區（Section）**：
+- **Section（節區）**：連結器使用的基本單位，用於符號解析和重定位
+- 透過**節區標頭表**（Section Header Table）描述
+- SP-Forth 產生的 `.o` 檔案主要包含節區資訊
+
+**執行檢視（Execution View）— 使用段（Segment）**：
+- **Segment（段）**：作業系統載入器使用的基本單位，用於建立程序記憶體映射
+- 透過**程式標頭表**（Program Header Table）描述
+- 最終可執行檔（由 `gcc` 連結產生）主要包含段資訊
+
+**SP-Forth 的特殊設計**：
+```
+SP-Forth 產生的 spf4.o（可重定位物件檔）
+    ├── 包含：節區標頭表（Section Header Table）
+    ├── 包含：.forth、.space、.dltable 等節區
+    └── 不含：程式標頭表（Program Header Table = 0）
+            
+gcc 連結後產生的 spf4（可執行檔）
+    ├── 包含：程式標頭表（Program Header Table）
+    ├── 包含：LOAD 段（將 .forth、.space 節區合併載入）
+    └── 節區標頭表可選（通常保留供偵錯使用）
+```
+
+**關於連結器腳本的對應**：§7.2 的 `forth.ld` 只映射了 `.forth` 和 `.space` 兩個節區，這是因為其餘節區（`.shstrtab`、`.strtab`、`.symtab`、`.rel.forth`、`.dltable`、`.dlstrings`）是連結器在中間物件檔階段消費的中繼資料——節區名稱字串表、符號表、重定位表在連結後會被合併或丟棄，不會出現在最終可執行檔的記憶體視圖中。`.dltable` 和 `.dlstrings` 則由啟動時的 `dl-init` 從 Forth 字典內的資料結構重建，不需要連結器腳本映射。
 
 ### 6.2 ELF 標頭
 
@@ -672,9 +703,11 @@ ASCIIZ" .dlstrings"           \ 索引 54
 
 ## 7. POSIX 映像儲存（posix/save.f + elf.f）
 
+> 本章聚焦 SAVE 在建構流程中的角色（ELF 產生、gcc 連結、spf4e 擴充版）；關於 SAVE 的 POSIX 平台層實作細節（段表欄位、重定位項目格式），另見 [04-posix-platform.md §14](04-posix-platform.md#14-elf-映像儲存posixsavef-深入解析)。
+
 ### 7.1 SAVE 流程概覽
 
-`SAVE` 字（`posix/save.f` §7.1 `SAVE` 流程）將 Forth 映像儲存為 ELF 可重定位物件檔，然後呼叫 gcc 連結為可執行檔。
+`SAVE` 字（`posix/save.f`）將 Forth 映像儲存為 ELF 可重定位物件檔，然後呼叫 gcc 連結為可執行檔。
 
 完整流程：
 
@@ -841,6 +874,8 @@ spf4.o(.space)
 
 ## 8. XSAVE — 交叉編譯 ELF 儲存（xsave.f）
 
+> 關於 XSAVE 在交叉編譯流程中的角色（virt-offset 設定、重定位語意），另見 [03-cross-compiler.md §13](03-cross-compiler.md#13-elf-儲存xsavef)；本章聚焦於 ELF 格式的實體寫出流程。
+
 ### 8.1 概述
 
 `xsave.f` 是 POSIX 版的映像儲存字，用於從 Windows 宿主編譯器交叉編譯產生 ELF 物件檔。它使用 `elf.f` 定義的 ELF 結構，但增加了額外的重定位步驟。
@@ -921,37 +956,249 @@ XSAVE 與 SAVE 的差異：
 
 ---
 
-## 9. PE 啟動殼層（spf_stub.f）
+## 9. PE 可執行檔格式詳解（Windows）
 
-### 9.1 概述
+> 本節詳細說明 Windows PE（Portable Executable）格式結構，涵蓋 DOS 標頭、COFF 標頭、可選標頭、段表與匯入表。理解這些結構有助於掌握 SP-Forth Windows 版的映像儲存機制。
 
-`spf_stub.f` 是 Windows 版的 PE 啟動殼層定義，包含 PE 檔頭、匯入表、和控制台訊息。在 POSIX 版本中不使用。
+### 9.1 PE 檔案整體佈局
 
-### 9.2 PE 檔頭結構
-
-PE 檔案佈局：
+PE 檔案由多個結構組成，從低址到高址依序為：
 
 ```
-┌────────────────────────────────┐ 0x0000
-│ DOS 標頭（128 位元組）        │ MZ 標識
-├────────────────────────────────┤ 0x0080
-│ PE 標頭                        │ "PE\0\0" 標識
-│  ├── 標準標頭（COFF 標頭）     │ 機器類型 0x014C（i386）
-│  └── 選擇性標頭（PE 選擇性標頭）│ ImageBase = 0x400000
-├────────────────────────────────┤
-│ .idata 段標頭                  │ 匯入表
-├────────────────────────────────┤
-│ .text 段標頭                   │ 程式碼段
-├────────────────────────────────┤ 0x0400
-│ .idata 段（512 位元組）        │ Import Directory + 函數名稱
-├────────────────────────────────┤
-│ .text 段（512 位元組）         │ 測試程式碼
-└────────────────────────────────┘
+偏移        結構名稱                      大小（典型值）
+─────────────────────────────────────────────────────────
+0x0000      DOS 標頭（IMAGE_DOS_HEADER）   64 bytes
+0x0040      DOS Stub（選用）                可變
+0x0080      PE 簽名（"PE\0\0"）             4 bytes
+0x0084      COFF 標頭（標準標頭）           20 bytes
+0x0098      可選標頭（IMAGE_OPTIONAL_HEADER） 224 bytes（PE32）
+0x0178      段表（Section Table）           n × 40 bytes
+0x0400      段資料（.idata, .text, .rsrc）  可變
+
+對齊說明：
+- 檔案對齊（FileAlignment）：0x200（512 bytes）
+- 記憶體對齊（SectionAlignment）：0x1000（4 KiB）
 ```
 
-### 9.3 匯入表
+### 9.2 DOS 標頭與 DOS Stub
+
+#### 9.2.1 DOS 標頭結構（IMAGE_DOS_HEADER）
+
+DOS 標頭存在是為了向後相容 MS-DOS。當在 DOS 模式下執行 PE 檔案時，會執行 DOS Stub 中的程式碼。
+
+| 偏移 | 大小 | 欄位名稱 | 值 | 說明 |
+|------|------|----------|-----|------|
+| 0x00 | 2 | e_magic | "MZ" (0x5A4D) | 魔數，Mark Zbikowski 的縮寫 |
+| 0x02 | 2 | e_cblp | - | 最後頁面位元組數 |
+| 0x04 | 2 | e_cp | - | 檔案頁面數 |
+| ... | ... | ... | ... | 其他 DOS 時期欄位 |
+| 0x3C | 4 | **e_lfanew** | 0x80 | **PE 標頭偏移（重要）** |
+
+**關鍵欄位 e_lfanew**：指向 PE 簽名的檔案偏移，通常為 0x80。Windows 載入器藉由此欄位找到真正的 PE 標頭。
+
+#### 9.2.2 DOS Stub
+
+DOS Stub 是一段簡單的 DOS 程式碼，當使用者在 MS-DOS 模式下執行 PE 檔案時顯示錯誤訊息：
+
+```
+"This program cannot be run in DOS mode."
+```
+
+在 SP-Forth 的 `spf_stub.f` 中，DOS Stub 被替換為更複雜的測試程式碼，嘗試載入 USER32.dll 並顯示訊息框（見 §9.7）。
+
+### 9.3 COFF 標頭（標準標頭）
+
+COFF（Common Object File Format）標頭緊接在 PE 簽名之後，大小固定為 20 bytes：
+
+| 偏移 | 大小 | 欄位名稱 | SP-Forth 典型值 | 說明 |
+|------|------|----------|-----------------|------|
+| 0x00 | 2 | Machine | 0x014C | i386（Intel 80386） |
+| 0x02 | 2 | **NumberOfSections** | 2-3 | 段數量（.text + .idata [+ .rsrc]） |
+| 0x04 | 4 | TimeDateStamp | - | 編譯時間戳 |
+| 0x08 | 4 | PointerToSymbolTable | 0 | 符號表偏移（EXE 通常為 0） |
+| 0x0C | 4 | NumberOfSymbols | 0 | 符號數量（EXE 通常為 0） |
+| 0x10 | 2 | **SizeOfOptionalHeader** | 0x00E0 | 可選標頭大小（224 = PE32） |
+| 0x12 | 2 | **Characteristics** | 0x0102 | 檔案特性（可執行、32位元） |
+
+**Characteristics 標誌位**（部分）：
+- 0x0002：可執行檔（IMAGE_FILE_EXECUTABLE_IMAGE）
+- 0x0100：32 位元機器（IMAGE_FILE_32BIT_MACHINE）
+- 0x0200：無重定位資訊（EXE 通常設定）
+
+### 9.4 可選標頭（IMAGE_OPTIONAL_HEADER）
+
+可選標頭雖名為「可選」，但對可執行檔而言是**必需的**。它包含作業系統載入器所需的關鍵資訊。
+
+#### 9.4.1 可選標頭 Magic 與基本資訊
+
+| 偏移 | 大小 | 欄位名稱 | 值 | 說明 |
+|------|------|----------|-----|------|
+| 0x00 | 2 | Magic | 0x010B | PE32（32位元可執行檔） |
+| 0x02 | 1 | MajorLinkerVersion | - | 連結器主版本 |
+| 0x03 | 1 | MinorLinkerVersion | - | 連結器次版本 |
+| 0x04 | 4 | SizeOfCode | - | 程式碼段總大小 |
+| 0x08 | 4 | SizeOfInitializedData | - | 已初始化資料總大小 |
+| 0x0C | 4 | SizeOfUninitializedData | - | 未初始化資料總大小 |
+
+#### 9.4.2 關鍵欄位（SP-Forth 使用）
+
+| 偏移 | 大小 | 欄位名稱 | SP-Forth 值 | 說明 |
+|------|------|----------|-------------|------|
+| 0x10 | 4 | **AddressOfEntryPoint** | 0x2000 | 程式入口點 RVA |
+| 0x14 | 4 | BaseOfCode | 0x2000 | 程式碼段基底 RVA |
+| 0x18 | 4 | BaseOfData | - | 資料段基底 RVA |
+| 0x1C | 4 | **ImageBase** | 0x400000 | 映像首選載入位址 |
+| 0x20 | 4 | **SectionAlignment** | 0x1000 | 記憶體中段對齊（4 KiB） |
+| 0x24 | 4 | **FileAlignment** | 0x200 | 檔案中段對齊（512 B） |
+| 0x28 | 2 | MajorOSVersion | - | 作業系統主版本 |
+| 0x2A | 2 | MinorOSVersion | - | 作業系統次版本 |
+| 0x2C | 2 | MajorImageVersion | - | 映像主版本 |
+| 0x2E | 2 | MinorImageVersion | - | 映像次版本 |
+| 0x30 | 2 | MajorSubsystemVersion | 4 | 子系統主版本 |
+| 0x32 | 2 | MinorSubsystemVersion | 0 | 子系統次版本 |
+| 0x34 | 4 | Win32VersionValue | 0 | 保留 |
+| 0x38 | 4 | **SizeOfImage** | - | **映像總大小（載入時）** |
+| 0x3C | 4 | **SizeOfHeaders** | 0x400 | 標頭總大小 |
+| 0x40 | 4 | CheckSum | 0 | 檔案總和檢查 |
+| 0x44 | 2 | **Subsystem** | 2/3 | **子系統（GUI=2, CUI=3）** |
+| 0x46 | 2 | DllCharacteristics | - | DLL 特性 |
+| 0x48 | 4 | SizeOfStackReserve | - | 堆疊保留大小 |
+| 0x4C | 4 | SizeOfStackCommit | - | 堆疊初始提交大小 |
+| 0x50 | 4 | SizeOfHeapReserve | - | 堆積保留大小 |
+| 0x54 | 4 | SizeOfHeapCommit | - | 堆積初始提交大小 |
+| 0x58 | 4 | LoaderFlags | 0 | 保留 |
+| 0x5C | 4 | **NumberOfRvaAndSizes** | 16 | 資料目錄項目數 |
+
+#### 9.4.3 RVA（Relative Virtual Address）概念
+
+**RVA** 是 PE 格式的核心概念：
+
+```
+虛擬位址（VA）= ImageBase + RVA
+```
+
+例如：
+- 若 ImageBase = 0x400000，EntryPoint RVA = 0x2000
+- 則實際入口點位址 = 0x400000 + 0x2000 = 0x402000
+
+**為何使用 RVA？**
+1. **位置無關**：載入器可以將映像載入不同位址（如 ASLR），只需調整基底，RVA 保持不變
+2. **節省空間**：相對於絕對位址，RVA 值較小（通常 < 0x10000），可用較小欄位儲存
+
+**RVA 與檔案偏移轉換**：
+```
+檔案偏移 = 段的 PointerToRawData + (RVA - 段的 VirtualAddress)
+```
+
+#### 9.4.4 資料目錄（Data Directory）
+
+可選標頭末尾包含 16 個資料目錄項目，每個項目 8 bytes（RVA + Size）：
+
+| 索引 | 名稱 | 說明 | SP-Forth 使用 |
+|------|------|------|---------------|
+| 0 | EXPORT | 匯出表 | 否 |
+| 1 | **IMPORT** | **匯入表** | **是（KERNEL32.dll）** |
+| 2 | RESOURCE | 資源表 | 選用 |
+| 3 | EXCEPTION | 例外處理表 | 否 |
+| 4 | SECURITY | 安全憑證 | 否 |
+| 5 | BASERELOC | 基底重定位表 | 否（SP-Forth 使用固定基底）|
+| 6 | DEBUG | 偵錯資訊 | 否 |
+| ... | ... | ... | ... |
+
+SP-Forth 主要使用 **IMPORT 資料目錄** 來載入 `LoadLibraryA` 和 `GetProcAddress`。
+
+### 9.5 段表（Section Table）
+
+段表緊接在可選標頭之後，每個段描述一個記憶體區域（程式碼、資料、匯入表等）。
+
+#### 9.5.1 段表項目結構（IMAGE_SECTION_HEADER）
+
+每個段表項目固定 40 bytes：
+
+| 偏移 | 大小 | 欄位名稱 | 說明 |
+|------|------|----------|------|
+| 0x00 | 8 | **Name** | 段名稱（ASCIIZ，如 ".text\0\0\0"） |
+| 0x08 | 4 | **VirtualSize** | 段在記憶體中的大小 |
+| 0x0C | 4 | **VirtualAddress** | 段的 RVA（記憶體中） |
+| 0x10 | 4 | **SizeOfRawData** | 段在檔案中的大小 |
+| 0x14 | 4 | **PointerToRawData** | 段在檔案中的偏移 |
+| 0x18 | 4 | PointerToRelocations | 重定位偏移（OBJ 檔案使用） |
+| 0x1C | 4 | PointerToLinenumbers | 行號表偏移 |
+| 0x20 | 2 | NumberOfRelocations | 重定位項目數 |
+| 0x22 | 2 | NumberOfLinenumbers | 行號數 |
+| 0x24 | 4 | **Characteristics** | **段特性** |
+
+#### 9.5.2 SP-Forth 使用的段
+
+| 段名稱 | 用途 | Characteristics |
+|--------|------|-----------------|
+| **.text** | 程式碼段，包含 Forth 字典 | 0x60000020（可執行、可讀、程式碼） |
+| **.idata** | 匯入表，包含 Import Directory 和 IAT | 0x40000040（已初始化、可讀、資料） |
+| **.rsrc**（選用） | 資源段（圖示、版本資訊等） | 0x40000040（已初始化、可讀、資料） |
+
+**Characteristics 標誌位**：
+- 0x00000020：包含程式碼（IMAGE_SCN_CNT_CODE）
+- 0x00000040：包含已初始化資料（IMAGE_SCN_CNT_INITIALIZED_DATA）
+- 0x20000000：可執行（IMAGE_SCN_MEM_EXECUTE）
+- 0x40000000：可讀（IMAGE_SCN_MEM_READ）
+- 0x80000000：可寫（IMAGE_SCN_MEM_WRITE）
+
+### 9.6 匯入表（Import Table）結構
+
+匯入表是 PE 檔案載入 DLL 並解析函數位址的關鍵機制。
+
+#### 9.6.1 匯入表整體結構
+
+匯入表位於 .idata 段，包含以下並行陣列：
+
+```
+┌─────────────────────────────────────┐
+│ Import Directory Table              │ 每個 DLL 一個項目（20 bytes）
+│  - Import Lookup Table RVA          │
+│  - TimeDateStamp                    │
+│  - ForwarderChain                   │
+│  - Name RVA                         │
+│  - Import Address Table RVA         │
+├─────────────────────────────────────┤
+│ Import Lookup Table (ILT) /         │ 函數名稱/序號陣列
+│ Import Name Table (INT)             │
+├─────────────────────────────────────┤
+│ Import Address Table (IAT)          │ 解析後的函數位址陣列
+│ （執行時由載入器填入）               │
+├─────────────────────────────────────┤
+│ Hint/Name Table                     │ 函數名稱字串
+│  - Hint（2 bytes）：匯出表索引提示    │
+│  - Name：函數名稱（ASCIIZ）           │
+├─────────────────────────────────────┤
+│ DLL 名稱字串                        │ 如 "KERNEL32.dll\0"
+└─────────────────────────────────────┘
+```
+
+#### 9.6.2 Import Directory Table 項目
+
+每個 DLL 對應一個 20-byte 項目：
+
+| 偏移 | 大小 | 欄位 | 說明 |
+|------|------|------|------|
+| 0x00 | 4 | ImportLookupTableRVA | 指向 ILT/INT（Import Name Table） |
+| 0x04 | 4 | TimeDateStamp | 時間戳（0 = 未繫結） |
+| 0x08 | 4 | ForwarderChain | 轉發鏈索引（-1 = 無轉發） |
+| 0x0C | 4 | NameRVA | 指向 DLL 名稱字串的 RVA |
+| 0x10 | 4 | ImportAddressTableRVA | 指向 IAT 的 RVA |
+
+#### 9.6.3 Import Lookup Table / Import Name Table
+
+每個項目 4 bytes，最高位元決定類型：
+
+- **最高位元 = 1**：按序號匯入
+  - 低 31 bits = 函數序號（Ordinal）
+- **最高位元 = 0**：按名稱匯入
+  - 指向 Hint/Name Table 的 RVA
+
+#### 9.6.4 SP-Forth 匯入表示例
 
 ```forth
+\ spf_stub.f 中的匯入表定義
 CREATE ImportDirectory
   \ Import Directory Table（2 個項目 + 結束項目）
   /ImportDirectory 2 * DUP ALLOT ERASE
@@ -971,11 +1218,11 @@ CREATE ImportDirectory
   HERE S" KERNEL32.dll" HERE SWAP DUP ALLOT MOVE 0 C, 0 C,
 ```
 
-匯入表匯入 `KERNEL32.dll` 的兩個函數：
+此匯入表匯入 `KERNEL32.dll` 的兩個函數：
 - `LoadLibraryA`：載入 DLL
 - `GetProcAddress`：取得 DLL 函數位址
 
-### 9.4 測試程式碼
+### 9.7 測試程式碼（DOS Stub 用途）
 
 啟動殼層包含一段組語測試程式碼，嘗試載入 USER32.dll 並顯示訊息框：
 
@@ -1001,7 +1248,7 @@ END-ASM
 
 這段程式碼在 SP-Forth 無法自行啟動時（例如缺少 DLL），提供一個可見的錯誤訊息。
 
-### 9.5 PE 儲存
+### 9.8 PE 儲存
 
 ```forth
 : SAVE-PE ( addr u -- )

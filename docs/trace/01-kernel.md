@@ -3,6 +3,8 @@
 > 對應原始碼：`spf_defkern.f`、`spf_forthproc.f`、`spf_forthproc_hl.f`、`spf_floatkern.f`
 > 原始碼版權：Copyright [C] 1992-1999 A.Cherezov ac@forth.org
 
+> 本章目標：理解 SP-Forth 如何用 `EAX = TOS` 的暫存器模型，讓 `DUP` 只要 2 條指令、`=` 完全不用分支跳躍。
+> 
 > 若你對 IA-32 組語、`CODE ... END-CODE`、`C,` / `,` 這類 SP-Forth assembler 寫法還不熟，建議先讀 [08-append-a.md](08-append-a.md) 再回來。
 
 ---
@@ -866,6 +868,16 @@ SP-Forth 提供了完整的 FPU 控制字操作：
 ---
 
 ## 5. 高階 Forth 程序（spf_forthproc_hl.f）深入解析
+
+`spf_forthproc_hl.f`（97 行）除了下文詳述的 HASH/MOVE/換行模式/>NUMBER 之外，也在最前面定義了幾個 ANS Forth 94 基本常數字：
+
+```forth
+0 CONSTANT FALSE      \ 假值常數 0
+-1 CONSTANT TRUE      \ 真值常數 -1（所有位元為 1）
+4 CONSTANT CELL       \ 一個儲存格的位元組數（IA-32 上為 4）
+```
+
+以及 `*/`（三項乘除）、`CHAR+`/`CHAR-`（字元指標進/退 1）、`CHARS`（縮放係數恆等映射）。這些字都以高階 Forth 定義，不在以下逐節詳列，但原始碼閱讀時會頻繁遇到。
 
 ### 5.1 HASH — FNV-1 雜湊函數
 

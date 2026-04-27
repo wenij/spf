@@ -3,6 +3,8 @@
 > 對應原始碼：`src/win/` 目錄下所有檔案
 > 原始碼版權：Copyright [C] 1992-1999 A.Cherezov ac@forth.org
 
+> 本章目標：看懂 WINAPI: 如何延遲解析 DLL 函式、API-CALL 的 stdcall 包裝、以及 SEH 如何取代 POSIX 信號。
+> 
 > 閱讀提示：本文件聚焦 **Windows 平台實作、PE 格式、SEH 例外處理與 Windows API 呼叫**。若你想看較高層的 I/O、初始化與例外生命週期，請接續閱讀 [05-io-error-init.md](05-io-error-init.md)。與 POSIX 平台（見 [04-posix-platform.md](04-posix-platform.md)）的對照，請見 §9。
 
 ---

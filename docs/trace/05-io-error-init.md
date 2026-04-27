@@ -6,6 +6,8 @@
 > `posix/init.f`、`posix/except.f`、`posix/module.f`、
 > `win/spf_win_con_io.f`、`win/spf_win_init.f`、`win/spf_win_api.f`
 
+> 本章目標：從 ACCEPT/EMIT 到 CATCH/THROW 再到 QUIT 主迴圈，掌握 SP-Forth 執行期的完整生命週期。
+> 
 > 範圍說明：本文件著重 **I/O、例外、初始化與互動式執行期生命週期**；若你要先看 POSIX 平台的 FFI、執行緒與信號原語本身，請先讀 [04-posix-platform.md](04-posix-platform.md)。
 
 ---

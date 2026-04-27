@@ -144,7 +144,7 @@ LEA EAX, [EDI] [EAX]     ; 計算 USER 變數位址
 | `tc-dl-imm.f` | )) 和 (()) 立即字 | [03-cross-compiler.md §9.7](03-cross-compiler.md#97-tc-dl-immf--和--立即字) |
 | `tc-configure-lines.f` | 換行模式設定 | [03-cross-compiler.md §14](03-cross-compiler.md#14-tc-configure-linesf行尾設定) |
 | `macroopt.f` | 巨集最佳化器（5548 行） | [07-optimizer.md](07-optimizer.md) |
-| `macroopt-hide.f` | 最佳化器輔助規則 | [07-optimizer.md §1.3](07-optimizer.md#13-輔助規則檔macroopt-hidef) |
+| `macroopt-hide.f` | 最佳化器輔助規則 | [07-optimizer.md §1.4](07-optimizer.md#14-輔助規則檔macroopt-hidef) |
 | `noopt.f` | 無最佳化替代方案 | [07-optimizer.md §2](07-optimizer.md#2-nooptf--最小最佳化器) |
 | `elf.f` | ELF 格式定義 | [06-build-save.md §6](06-build-save.md#6-elf-映像格式elff) |
 | `xsave.f` | POSIX 交叉編譯 ELF 儲存 | [06-build-save.md §8](06-build-save.md#8-xsave--交叉編譯-elf-儲存xsavef) |
