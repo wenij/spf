@@ -12,7 +12,7 @@
 
 Makefile（`src/Makefile`）管理 SP-Forth 的完整建構流程，支援 POSIX 和 Windows 雙平台。
 
-**平台自動偵測**（第 44-50 行）：
+**平台自動偵測**：
 
 ```makefile
 ifeq ($(OSTYPE),cygwin)
@@ -24,7 +24,7 @@ else
 endif
 ```
 
-**跨平台編譯**（第 55-60 行）：
+**跨平台編譯**：
 
 ```makefile
 ifeq ($(platform),posix)
@@ -36,7 +36,7 @@ endif
 
 當在 Linux 上建構 Windows 目標（`spf4.exe`）時，自動使用 `wine` 包裝；反之在 Windows 上建構 POSIX 目標時，使用 `wsl` 包裝。
 
-**宿主編譯器下載**（第 18-28 行）：
+**宿主編譯器下載**：
 
 ```makefile
 url-binaries-base := https://github.com/rufig/spf4-cvs-archive/releases/download/v1.0/
@@ -87,7 +87,7 @@ make
 3. `../spf4`：用 GCC 與 `forth.ld` 將 `spf4.o` 連結成最小核心可執行檔。
 4. `../spf4e`：以 `../spf4` 載入 `lib/ext/spf4e.f` 後再儲存出的擴充映像。
 
-**擴充版建構**（第 97-103 行）：
+**擴充版建構**：
 
 ```makefile
 define build-spf4e
@@ -163,7 +163,7 @@ int main() {
 }
 ```
 
-**前置條件驗證**（`test()` 函數，第 53-65 行）：
+**前置條件驗證**（`test()` 函數，見 §1.4）：
 
 ```c
 int test() {
@@ -674,7 +674,7 @@ ASCIIZ" .dlstrings"           \ 索引 54
 
 ### 7.1 SAVE 流程概覽
 
-`SAVE` 字（`posix/save.f` 第 425-457 行）將 Forth 映像儲存為 ELF 可重定位物件檔，然後呼叫 gcc 連結為可執行檔。
+`SAVE` 字（`posix/save.f` §7.1 `SAVE` 流程）將 Forth 映像儲存為 ELF 可重定位物件檔，然後呼叫 gcc 連結為可執行檔。
 
 完整流程：
 

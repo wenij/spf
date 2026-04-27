@@ -1091,159 +1091,27 @@ ERROR2 是向量 `ERROR` 的預設實作，負責：
 
 ## 8. POSIX 信號處理與初始化（posix/init.f）
 
-### 8.1 DUMP-TRACE — 信號處理器中的堆疊追蹤
+### 8.1 POSIX 信號處理器機制（概述）
 
-```forth
-: DUMP-TRACE ( context siginfo signo -- )
-  IN-EXCEPTION @ IF DROP EXIT THEN       \ 遞迴保護
-  TRUE IN-EXCEPTION !
+POSIX 信號處理機制包含四個元素的協作：**信號處理器安裝**（`set-errsignal-handler`）、**信號→例外轉換**（`signum>ior`）、**堆疊追蹤傾印**（`DUMP-TRACE`）、與 **例外橋接**（`(errsignal)`）。這四個元素的原始碼與詳細分析已在 [04-posix-platform.md §12](04-posix-platform.md#12-信號處理posixinitf深入解析) 完整覆蓋，此處僅說明它們在執行期生命週期中的角色：
 
-  ROT ( siginfo signo context )
-  OVER OVER CONTEXT_EIP + @ SWAP ( addr code ) DUMP-EXCEPTION-HEADER
+- `(errsignal)` 從 `ucontext_t` 恢復 EDI 暫存器（TLS 基底），確保 THROW 能正確存取 USER 變數（詳見 01-kernel.md §6.3 與 04-posix-platform.md §12.2）。
+- 信號透過 `signum>ior` 轉換為 Forth 例外碼後 THROW，使 `CATCH`/`THROW` 機制能攔截 SIGSEGV、SIGFPE 等同步信號。
+- `IN-EXCEPTION` 遞迴保護、`sigact` 結構的配置與 `set-errsignal-handler` 的安裝流程，請見 `04-posix-platform.md §12.4`。
 
-  SWAP ( signo ) ." [" 1 <( )) strsignal ASCIIZ> TYPE ." ] "
-  SWAP ( siginfo )
-  ." Code:" DUP 2 CELLS + @ . ." At:" 3 CELLS + @ ADDR.
+### 8.2 PROCESS-INIT — POSIX 進程初始化
 
-  >R
-  R@ CONTEXT_ESP + @ ( esp )
-  R@ CONTEXT_EAX + @ ( eax )
-  R> CONTEXT_EBP + @ ( ebp )
-  DUMP-TRACE-USING-REGS
-  ." END OF EXCEPTION REPORT" CR
-  FALSE IN-EXCEPTION !
-;
-```
+初始化流程的實作細節已在 [04-posix-platform.md §12.5](04-posix-platform.md#125-processinit程序初始化) 分析。此處僅列出執行期生命週期中的七個步驟：
 
-POSIX 版的 DUMP-TRACE 接收三個引數（來自 `sa_sigaction` 信號處理器原型）：
-- `context`：`ucontext_t` 結構指標，包含暫存器快照
-- `siginfo`：`siginfo_t` 結構指標，包含信號詳細資訊
-- `signo`：信號編號
+1. 清除動態連結匯入表（`ERASE-IMPORTS`）
+2. 初始化動態連結子系統（`dl-init`）
+3. 設定動態連結錯誤處理器
+4. 分配主執行緒的 TLS 記憶體（`ALLOCATE-THREAD-MEMORY`）
+5. 初始化堆疊與全域狀態（`POOL-INIT`，詳見 §10.4）
+6. 安裝信號處理器（`set-errsignal-handler`）
+7. 執行進程啟動鉤子（`AT-PROCESS-STARTING`）
 
-它從 `context` 中提取暫存器值（透過 `CONTEXT_EIP`、`CONTEXT_ESP`、`CONTEXT_EAX`、`CONTEXT_EBP` 等偏移，定義於 `posix/config.auto.f`），然後呼叫 `DUMP-TRACE-USING-REGS` 重建堆疊追蹤。
-
-siginfo 的兩個有用欄位：
-- `2 CELLS +`：`si_code`（信號原因代碼）
-- `3 CELLS +`：`si_addr`（觸發信號的位址，如 SIGSEGV 的記憶體位址）
-
-`IN-EXCEPTION` 變數是遞迴保護機制：若在處理例外時又發生信號，直接 DROP 離開，避免無限遞迴。
-
-### 8.2 signum>ior — 信號到 Forth 例外碼的對應
-
-```forth
-: signum>ior ( code sig -- ior )
-   DUP SIGSEGV = IF 2DROP -9  EXIT THEN   \ 記憶體存取違規
-   DUP SIGILL  = IF 2DROP -9  EXIT THEN   \ 非法指令
-   DUP SIGBUS  = IF 2DROP -23 EXIT THEN   \ 匯流排錯誤
-   DUP SIGFPE  = IF DROP                    \ 浮點例外：細分
-     DUP FPE_INTDIV = IF DROP -10 EXIT THEN \ 整數除以零
-     DUP FPE_INTOVF = IF DROP -11 EXIT THEN \ 整數溢位
-     DUP FPE_FLTDIV = IF DROP -42 EXIT THEN \ 浮點除以零
-     DUP FPE_FLTOVF = IF DROP -43 EXIT THEN \ 浮點溢位
-     DUP FPE_FLTUND = IF DROP -54 EXIT THEN \ 浮點下溢
-     DUP FPE_FLTRES = IF DROP -41 EXIT THEN \ 浮點結果不精確
-     DUP FPE_FLTINV = IF DROP -46 EXIT THEN \ 浮點無效操作
-     DROP -55 EXIT                          \ 其他浮點例外
-   THEN
-   256 + NEGATE                              \ 其他信號：signo + 256 取負
-;
-```
-
-| 信號 | si_code | Forth 例外碼 | 說明 |
-|------|---------|-------------|------|
-| SIGSEGV | * | -9 | 段錯誤/記憶體違規 |
-| SIGILL | * | -9 | 非法指令 |
-| SIGBUS | * | -23 | 匯流排錯誤 |
-| SIGFPE | FPE_INTDIV | -10 | 整數除以零 |
-| SIGFPE | FPE_INTOVF | -11 | 整數溢位 |
-| SIGFPE | FPE_FLTDIV | -42 | 浮點除以零 |
-| SIGFPE | FPE_FLTOVF | -43 | 浮點溢位 |
-| SIGFPE | FPE_FLTUND | -54 | 浮點下溢 |
-| SIGFPE | FPE_FLTRES | -41 | 浮點結果不精確 |
-| SIGFPE | FPE_FLTINV | -46 | 浮點無效操作 |
-| SIGFPE | * | -55 | 其他浮點例外 |
-| 其他 | * | -(signo+256) | 未分類信號 |
-
-### 8.3 (errsignal) — 信號到 THROW 的橋接
-
-```forth
-: (errsignal) ( ctxt siginfo num -- x )
-    2>R
-    DUP CONTEXT_EDI + @ TlsIndex!     \ 恢復執行緒本地儲存指標（EDI）
-    2R@
-        DUMP-TRACE                     \ 傾印診斷資訊
-    2R> SWAP SIGINFO_CODE + @ SWAP signum>ior THROW  \ 轉換並 THROW
-;
-```
-
-`(errsignal)` 的關鍵步驟：
-
-1. **恢復 EDI**：`CONTEXT_EDI` 中的值是信號發生時的 EDI 暫存器值。在 SP-Forth 中，EDI 指向執行緒本地儲存（TLS）基底，但信號處理器執行在 C 執行環境，EDI 可能被覆蓋。恢復 EDI 是 HANDLER（USER 變數）正常運作的先決條件，因為 USER 變數透過 `EDI + offset` 存取。
-
-2. **傾印追蹤**：呼叫 `DUMP-TRACE` 輸出診斷資訊。
-
-3. **THROW**：從 `siginfo->si_code` 和信號編號計算 Forth 例外碼，然後 THROW。THROW 會恢復 SP 和 RP 到 CATCH 時的位置，從而改變執行流程回到例外處理器。
-
-**為什麼必須 THROW 而非 RETURN**：信號處理器正常返回後，核心會恢復 `ucontext_t` 中的上下文，重新執行觸發信號的指令，導致無限迴圈。THROW 透過修改回返堆疊來繞過這個問題。
-
-### 8.4 sigact 結構與 set-errsignal-handler
-
-```forth
-' (errsignal) 3 TC-CALLBACK: errsignal    \ 註冊為 3 參數回呼
-
-CREATE sigact
-  ' errsignal >VIRT ,                      \ sa_sigaction：FORTH 信號處理器
-  SIZEOF_SIGSET ALLOT                       \ sa_mask：空信號遮罩
-  SA_RESTART SA_SIGINFO + SA_NODEFER ,      \ sa_flags
-  0  ,                                      \ sa_restorer：NULL
-```
-
-`sigact` 結構對應 POSIX `struct sigaction`：
-
-| 欄位 | 值 | 說明 |
-|------|-----|------|
-| sa_sigaction | `errsignal >VIRT` | 指向 `(errsignal)` 的虛擬位址 |
-| sa_mask | 空 | 不遮罩任何信號 |
-| sa_flags | `SA_RESTART|SA_SIGINFO|SA_NODEFER` | SA_RESTART：自動重啟中斷的系統呼叫；SA_SIGINFO：使用三參數處理器；SA_NODEFER：處理信號時不遮罩自身 |
-
-```forth
-: set-errsignal-handler
-   (( sigact CELL+ )) sigemptyset DROP        \ 清空信號遮罩
-   (( SIGILL  sigact 0 )) sigaction DROP      \ 註冊 SIGILL 處理器
-   (( SIGBUS  sigact 0 )) sigaction DROP
-   (( SIGFPE  sigact 0 )) sigaction DROP
-   (( SIGSEGV sigact 0 )) sigaction DROP
-;
-```
-
-四個同步信號被攔截：SIGILL、SIGBUS、SIGFPE、SIGSEGV。SIGINT 被註解掉（因為它會干擾正常的 Ctrl+C 操作）。
-
-### 8.5 PROCESS-INIT — POSIX 進程初始化
-
-```forth
-: PROCESS-INIT ( n -- )
-  ERASE-IMPORTS                          \ 第 1 步：清除匯入表
-  dl-init                                \ 第 2 步：初始化動態連結
-  ['] dl-no-symbol  TO symbol-not-found-error   \ 第 3 步：設定錯誤處理
-  ['] dl-no-library TO library-not-found-error
-  ALLOCATE-THREAD-MEMORY                \ 第 4 步：分配 TLS 記憶體
-  POOL-INIT                              \ 第 5 步：初始化堆疊和全域狀態
-  set-errsignal-handler                  \ 第 6 步：安裝信號處理器
-  ['] AT-PROCESS-STARTING ERR-EXIT       \ 第 7 步：執行進程啟動鉤子
-;
-```
-
-七個初始化步驟的職責：
-
-1. **ERASE-IMPORTS**：清除動態連結匯入表（posix/defwords.f），防止未初始化的匯入被意外使用
-2. **dl-init**：初始化動態連結子系統（posix/dl.f），開啟主程式的共用函式庫控制代碼
-3. **設定錯誤處理**：`dl-no-symbol` 和 `dl-no-library` 是動態連結失敗時的錯誤處理器
-4. **ALLOCATE-THREAD-MEMORY**：分配執行緒本地儲存記憶體（posix/memory.f）
-5. **POOL-INIT**：初始化堆疊指標、搜尋順序、編譯狀態等
-6. **set-errsignal-handler**：安裝 SIGILL/SIGBUS/SIGFPE/SIGSEGV 的信號處理器
-7. **AT-PROCESS-STARTING**：透過 ERR-EXIT 執行進程啟動鉤子（分散式定義）
-
-### 8.6 USER-INIT 和 USER-EXIT
+### 8.3 USER-INIT 和 USER-EXIT
 
 ```forth
 : USER-INIT ( n -- )
@@ -1258,14 +1126,14 @@ CREATE sigact
 ;
 ```
 
-### 8.7 平台識別
+### 8.4 平台識別
 
 ```forth
 : PLATFORM ( -- a u ) S" Linux" ;
 : OS-API   ( -- a u ) S" posix" ;
 ```
 
-### 8.8 IN-EXCEPTION 變數
+### 8.5 IN-EXCEPTION 變數
 
 ```forth
 VARIABLE IN-EXCEPTION
