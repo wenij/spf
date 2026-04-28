@@ -125,10 +125,10 @@ LEA EAX, [EDI] [EAX]     ; 計算 USER 變數位址
 | `spf_win_init.f` | Windows 初始化、SEH | [09-windows-platform.md §5](09-windows-platform.md#5-例外處理與-sehspf_win_initf-深入解析) |
 | `spf_win_envir.f` | Windows 環境查詢（GetEnvironmentVariableA） | [09-windows-platform.md §6](09-windows-platform.md#6-環境查詢與錯誤處理spf_win_envirf-深入解析) |
 | `spf_pe_save.f` | PE 映像儲存 | [09-windows-platform.md §7](09-windows-platform.md#7-pe-映像儲存spf_pe_savef-深入解析) |
-| `spf_win_con_io.f` | Windows 控制台 I/O | [09-windows-platform.md](09-windows-platform.md) |
-| `spf_win_io.f` | Windows 檔案 I/O | [09-windows-platform.md](09-windows-platform.md) |
-| `spf_win_except.f` | Windows 例外 façade | [09-windows-platform.md](09-windows-platform.md) |
-| `spf_win_module.f` | Windows 路徑管理（GetModuleFileName） | [09-windows-platform.md §8](09-windows-platform.md#8-模組路徑管理spf_win_modulef) |
+| `spf_win_con_io.f` | Windows 控制台 I/O | [09-windows-platform.md §9](09-windows-platform.md#9-windows-控制台-iospf_win_con_iof-深入解析) |
+| `spf_win_io.f` | Windows 檔案 I/O | [09-windows-platform.md §8](09-windows-platform.md#8-windows-檔案-iospf_win_iof-深入解析) |
+| `spf_win_except.f` | Windows 例外 façade | [09-windows-platform.md §5](09-windows-platform.md#5-例外處理與-sehspf_win_initf-深入解析) |
+| `spf_win_module.f` | Windows 路徑管理（GetModuleFileName） | [09-windows-platform.md §10](09-windows-platform.md#10-模組路徑管理spf_win_modulef) |
 | `spf_win_conv.f` | 編碼轉換（CharToOemBuffA, OemToCharBuffA） | [09-windows-platform.md](09-windows-platform.md) |
 | `spf_win_cgi.f` | CGI 支援 | [09-windows-platform.md](09-windows-platform.md) |
 | `spf_win_const.f` | Windows 常數 | [09-windows-platform.md](09-windows-platform.md) |

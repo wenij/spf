@@ -201,7 +201,7 @@ VECT <FORTH-INSTANCE  \ 離開 Forth 環境（恢復 EDI）
 
 這裡的 `TlsIndex!` / `TlsIndex@` 是 **SP-Forth 自己的抽象原語名稱**。在 POSIX 版中，它們同樣存在，但語意應理解為「更新 / 讀取目前執行緒的 TLS 基底指標」，而不是直接對應 `pthread_key_*` 那類 API 名稱。
 
->`TlsIndex!` 的組合語言本體即 `MOV EDI, EAX`（將 TLS 基底寫入 EDI），其在信號處理中的角色請見 [04-posix-platform.md §12.2](04-posix-platform.md#122-errsignal信號處理器)；其在一般執行緒切換中的角色，請見 [01-kernel.md §6.3](01-kernel.md#63-執行緒安全與-tls-實作)。
+>`TlsIndex!` 的組合語言本體即 `MOV EDI, EAX`（將 TLS 基底寫入 EDI），其在信號處理中的角色請見 §12.2；其在一般執行緒切換中的角色，請見 [01-kernel.md §6.3](01-kernel.md#63-執行緒安全與-tls-實作)。
 
 ---
 

@@ -1422,6 +1422,20 @@ END-ASM
 ;
 ```
 
+### 9.9 PE 資源段（src/win/res/）
+
+Windows 建構流程會額外編譯資源檔，產生 `spf.FRES`，最終連結進 `spf4.exe`：
+
+| 檔案 | 作用 |
+|------|------|
+| `spf.rc` | 資源腳本：定義圖示（`spf.ico`）、應用程式清單（`spf.manifest`）與 `VERSIONINFO`（版本 4.29.0.0） |
+| `spf.ico` | 執行檔圖示 |
+| `spf.manifest` | 宣告 Common Controls v6 相依性（讓 Windows XP 以上使用主題化控制項） |
+| `res.bat` | 建構腳本：呼叫 `rc.exe` 編譯 `spf.rc` → `spf.res`，再用 SP-Forth 工具 `fres.f` 轉為 `spf.FRES` |
+| `spf.FRES` | 編譯後的資源物件檔，由連結器併入 `.rsrc` 段 |
+
+`spf.manifest` 中的 `assemblyIdentity` 宣告處理器架構為 `X86`、版本 `4.29.0.0`，這與 `spf.f` 中定義的 `SPF-KERNEL-VERSION` 一致。資源段讓最終的 `spf4.exe` 擁有正確的圖示、版本資訊與 UAC/DPI 感知行為。
+
 ---
 
 ## 10. TSAVE — Windows PE 儲存（tsave.f）

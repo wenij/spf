@@ -5,7 +5,7 @@
 
 > 本章目標：看懂 WINAPI: 如何延遲解析 DLL 函式、API-CALL 的 stdcall 包裝、以及 SEH 如何取代 POSIX 信號。
 > 
-> 閱讀提示：本文件聚焦 **Windows 平台實作、PE 格式、SEH 例外處理與 Windows API 呼叫**。若你想看較高層的 I/O、初始化與例外生命週期，請接續閱讀 [05-io-error-init.md](05-io-error-init.md)。與 POSIX 平台（見 [04-posix-platform.md](04-posix-platform.md)）的對照，請見 §9。
+> 閱讀提示：本文件聚焦 **Windows 平台實作、PE 格式、SEH 例外處理與 Windows API 呼叫**。若你想看較高層的 I/O、初始化與例外生命週期，請接續閱讀 [05-io-error-init.md](05-io-error-init.md)。與 POSIX 平台（見 [04-posix-platform.md](04-posix-platform.md)）的對照，請見 §11。
 
 ---
 
@@ -345,6 +345,82 @@ Windows 版不同於 POSIX：
 - 無 `set-errsignal-handler`（SEH 取代信號處理）
 - 無 `ALLOCATE-THREAD-MEMORY`（每個執行緒有獨立 Heap）
 
+### 5.4 例外處理器本體（spf_win_except.f）
+
+`spf_win_init.f` 設定 SEH 鏈的**框架**，而 `spf_win_except.f` 提供**處理器本體** `(EXC)` 與 `HALT`：
+
+```forth
+\ spf_win_except.f:18-22
+: HALT ( ERRNUM -> )
+  AT-THREAD-FINISHING
+  AT-PROCESS-FINISHING
+  ExitProcess
+;
+```
+
+`HALT` 是 Windows 版的「優雅死亡」：先執行執行緒最終化、再執行程序最終化（`DESTROY-HEAP`），最後呼叫 `ExitProcess`。這與 POSIX 版 `HALT` 呼叫 `_exit` 的語意相同。
+
+#### (EXC) — SEH 處理器核心
+
+```forth
+\ spf_win_except.f:30-60
+: (EXC) ( DispatcherContext ContextRecord EstablisherFrame ExceptionRecord -- flag )
+  (ENTER)                           \ 進入 Forth 執行環境
+  OVER DUP 0 FS!                    \ 恢復上一層 SEH 鏈
+  CELL+ CELL+ @ TlsIndex!           \ 從 EstablisherFrame 恢復 TLS 基底
+
+  DUP @ 0xC000013A = IF             \ CONTROL_C_EXIT（Wine 上的 Ctrl+C）
+    0xC000013A HALT
+  THEN
+  DUP <EXC-DUMP>
+
+  HANDLER @ 0= IF                   \ 無 CATCH 框架，無法恢復
+     DESTROY-HEAP
+     -1 ExitThread
+  THEN
+
+  FINIT                             \ 重置 x87 FPU
+  @ THROW                           \ 將 Windows 例外碼轉為 Forth THROW
+  R> DROP                           \ 清理 callback 返回位址
+;
+```
+
+`(EXC)` 的參數是 SEH 呼叫慣例：`ExceptionRecord`（例外記錄）、`EstablisherFrame`（目前 SEH 框架位址）、`ContextRecord`（執行緒上下文）、`DispatcherContext`（分派器上下文）。它執行以下步驟：
+
+1. **恢復 SEH 鏈**：`OVER DUP 0 FS!` 從 `EstablisherFrame` 取出上一層 SEH 記錄，寫回 `FS:[0]`。這與 POSIX 信號處理器恢復 `sa_mask` 的語意類似——防止同一例外無限遞迴。
+2. **恢復 TLS**：`CELL+ CELL+ @ TlsIndex!` 從 `EstablisherFrame+8` 取出儲存的 TLS 基底，寫入 `EDI`。這是 Windows 版 `CATCH/THROW` 能跨 SEH 運作的關鍵。
+3. **Ctrl+C 特殊處理**：`0xC000013A`（`CONTROL_C_EXIT`）在 Wine 上由 Ctrl+C 觸發，直接呼叫 `HALT`。
+4. **無 CATCH 時終止**：若 `HANDLER @ = 0`（沒有 `CATCH` 框架），執行 `DESTROY-HEAP` 後以 `-1` 結束執行緒。這對應 POSIX 版信號處理器中的 `ABORT`。
+5. **FPU 重置**：`FINIT` 清除 x87 可能的異常狀態，避免 FPU 控制字污染後續浮點運算。
+6. **THROW**：`@ THROW` 將 `ExceptionRecord->ExceptionCode` 作為 Forth 例外號碼拋出，讓上層 `CATCH` 捕獲。
+
+#### SET-EXC-HANDLER — 安裝 SEH 框架
+
+```forth
+\ spf_win_except.f:65-74
+: SET-EXC-HANDLER
+  R> R>
+  TlsIndex@ >R                    \ 儲存目前 TLS
+  ['] (EXC) >R                    \ 儲存處理器位址
+  0 FS@ >R                        \ 儲存舊 SEH 鏈頂端
+  RP@ 0 FS!                       \ 新 SEH 鏈頂端 = 目前返回堆疊
+  RP@ EXC-HANDLER !
+  ['] DROP-EXC-HANDLER >R         \ 返回後的清理器
+  >R >R
+;
+```
+
+`SET-EXC-HANDLER` 利用**返回堆疊**直接建構 SEH 鏈節點：
+- `R>` `R>` 先彈出正常的返回位址（暫存）
+- 依序將 `TlsIndex`、`(EXC)` 位址、舊 `FS:[0]` 壓入返回堆疊
+- `RP@ 0 FS!` 讓 `FS:[0]` 指向這個堆疊上的結構，完成 SEH 鏈安裝
+- `['] DROP-EXC-HANDLER >R` 作為「返回後的清理動作」
+- `>R >R` 恢復正常的返回位址
+
+這與 POSIX 版 `CATCH` 將 `HANDLER` 串列節點壓入資料堆疊的機制異曲同工，只是 Windows 使用**硬體定義的 SEH 鏈**（`FS:[0]`），而 POSIX 使用**軟體模擬的例外鏈**（`HANDLER` 變數）。
+
+> 對照閱讀：POSIX 版的 `(errsignal)` 與 `SET-ERR-SIGNAL-HANDLER` 請見 [04-posix-platform.md §12.2](04-posix-platform.md#122-errsignal信號處理器)。
+
 ---
 
 ## 6. 環境查詢與錯誤處理（spf_win_envir.f）
@@ -573,7 +649,180 @@ END-CODE
 
 ---
 
-## 8. 模組路徑管理（spf_win_module.f）
+## 8. Windows 檔案 I/O（spf_win_io.f）深入解析
+
+Windows 版使用 Win32 `CreateFileA`/`ReadFile`/`WriteFile` 家族實作 ANS Forth 檔案存取字詞。與 POSIX 使用檔案描述符（file descriptor，整數）不同，Windows 使用 `HANDLE`（核心物件控制代碼，本質上也是整數，但語意不同）。
+
+### 8.1 開檔與建檔
+
+```forth
+\ spf_win_io.f:16-33
+: CREATE-FILE ( c-addr u fam -- fileid ior )
+  NIP SWAP >R >R
+  0 FILE_ATTRIBUTE_ARCHIVE
+  CREATE_ALWAYS
+  0 ( secur ) 0 ( share )
+  R> ( access=fam ) R> ( filename )
+  CreateFileA DUP -1 = IF GetLastError ELSE 0 THEN
+;
+```
+
+`CREATE-FILE` 捨棄 `fam` 中的 ` fam`（`NIP` 掉長度），保留檔名與存取模式，映射到 `CreateFileA` 的參數：
+
+| Forth 參數 | Win32 參數 | 說明 |
+|-----------|-----------|------|
+| `fam`（長度被捨棄） | `dwDesiredAccess` | 存取模式（`O_RDONLY`/`O_WRONLY`/`O_RDWR`） |
+| `CREATE_ALWAYS` | `dwCreationDisposition` | 總是建立新檔，若存在則覆蓋 |
+| `0` | `lpSecurityAttributes` | 無安全描述元 |
+| `0` | `dwShareMode` | 不共享 |
+
+`OPEN-FILE`（第 98-113 行）類似，但使用 `OPEN_EXISTING`。若 `CreateFileA` 回傳 `-1`（`INVALID_HANDLE_VALUE`），則透過 `GetLastError` 取得錯誤碼。
+
+### 8.2 共享開檔變體
+
+```forth
+\ spf_win_io.f:37-46
+: CREATE-FILE-SHARED ( c-addr u fam -- fileid ior )
+  ... 3 ( share ) ... CreateFileA ...
+```
+
+`CREATE-FILE-SHARED` 與 `OPEN-FILE-SHARED`（第 47-68 行）使用 `dwShareMode = 3`（`FILE_SHARE_READ | FILE_SHARE_WRITE`），`OPEN-FILE-SHARED` 甚至嘗試 `7`（加上 `FILE_SHARE_DELETE`）。若 `CreateFileA` 在 Win9x 上回傳錯誤碼 `87`（`ERROR_INVALID_PARAMETER`），則降級為 `3` 重試——這是針對 Win9x Bug #3104038 的 workaround。
+
+### 8.3 讀寫與位置控制
+
+`READ-FILE`（第 117-140 行）與 `WRITE-FILE`（第 203-218 行）分別包裝 `ReadFile` 與 `WriteFile`：
+
+```forth
+: READ-FILE ( c-addr u1 fileid -- u2 ior )
+  >R 2>R
+  0 lpNumberOfBytesRead R> R> R>
+  ReadFile ERR
+  lpNumberOfBytesRead @ SWAP
+  DUP 109 = IF DROP 0 THEN  \ broken pipe — 視為正常 EOF
+;
+```
+
+特別的是錯誤碼 `109`（`ERROR_BROKEN_PIPE`）被視為正常 EOF，直接回傳 `u2=0, ior=0`。這讓管道（pipe）讀取在 Windows 上與 POSIX 行為一致。
+
+`FILE-POSITION`、`FILE-SIZE`、`REPOSITION-FILE` 使用 `SetFilePointer`/`GetFileSize` 處理 64 位元檔案偏移：
+
+```forth
+USER lpDistanceToMoveHigh
+
+: FILE-POSITION ( fileid -- ud ior )
+  >R FILE_CURRENT lpDistanceToMoveHigh DUP 0! 0 R>
+  SetFilePointer
+  DUP -1 = IF GetLastError ELSE 0 THEN
+  lpDistanceToMoveHigh @ SWAP
+;
+```
+
+`lpDistanceToMoveHigh` 作為 64 位元偏移的高 32 位元 USER 變數。這與 POSIX 版使用 `lseek64`（接受 64 位元 `off_t`）的語意相同，只是 Win32 API 將高低位分開處理。
+
+### 8.4 逐行讀寫
+
+`READ-LINE`（第 158-198 行）的實作與 POSIX 版幾乎一致：
+
+1. 記錄目前檔案位置（`_fp1`、`_fp2`）
+2. 讀取一塊資料（含行尾字元）
+3. 用 `EOLN SEARCH` 找行尾
+4. 若找到，將檔案位置重置到行尾之後，回傳該行長度
+5. 若未找到，回傳已讀長度與 `flag=false`
+
+`WRITE-LINE`（第 238-248 行）則是 `WRITE-FILE` 接著寫出 `EOLN`。
+
+### 8.5 其他檔案操作
+
+| Forth 字 | Win32 API | 說明 |
+|---------|-----------|------|
+| `DELETE-FILE` | `DeleteFileA` | 刪除檔案 |
+| `FLUSH-FILE` | `FlushFileBuffers` | 強制寫入磁碟 |
+| `FILE-EXIST` | `GetFileAttributesA` | 檢查檔案/目錄是否存在 |
+| `FILE-EXISTS` | `GetFileAttributesA` + `FILE_ATTRIBUTE_DIRECTORY` 遮罩 | 只檢查檔案（排除目錄） |
+| `RESIZE-FILE` | `SetEndOfFile` | 先 `REPOSITION-FILE` 再截斷 |
+
+### 8.6 Windows vs POSIX 檔案 I/O 對照
+
+| 特性 | POSIX（`posix/io.f`） | Windows（`spf_win_io.f`） |
+|------|----------------------|---------------------------|
+| 檔案控制代碼型別 | 檔案描述符（`int` fd） | 核心物件控制代碼（`HANDLE`） |
+| 開檔 API | `open64` | `CreateFileA` |
+| 讀寫 API | `read` / `write` | `ReadFile` / `WriteFile` |
+| 定位 API | `lseek64` | `SetFilePointer` |
+| 截斷 API | `ftruncate64` | `SetEndOfFile` |
+| 共享模式 | `fcntl` 或 `open` 的旗標 | `dwShareMode` 參數 |
+| 錯誤碼 | `errno` | `GetLastError` |
+| broken pipe | `EPIPE`（由 `except.f` 處理） | 錯誤碼 `109`，直接視為 EOF |
+
+---
+
+## 9. Windows 控制台 I/O（spf_win_con_io.f）深入解析
+
+Windows 控制台輸入不使用標準 `ReadFile`，而是使用 Win32 **Console API**（`ReadConsoleInputA`、`GetNumberOfConsoleInputEvents`），因為需要區分鍵盤事件、滑鼠事件與視窗緩衝區大小變更事件。
+
+### 9.1 低階主控台事件讀取
+
+```forth
+\ spf_win_con_io.f:11-18
+: EKEY? ( -- flag )
+  0 >R RP@ H-STDIN GetNumberOfConsoleInputEvents DROP R>
+;
+```
+
+`EKEY?` 詢問主控台輸入緩衝區是否有可用事件。`H-STDIN` 在 Windows 版中是主控台輸入 `HANDLE`（與 POSIX 版的 fd 不同）。
+
+```forth
+\ spf_win_con_io.f:29-43
+CREATE INPUT_RECORD ( /INPUT_RECORD) 20 2 * CHARS ALLOT
+
+: EKEY ( -- u )
+  0 >R RP@ 2 INPUT_RECORD H-STDIN
+  ReadConsoleInputA DROP RDROP
+  INPUT_RECORD W@ KEY_EVENT <> IF 0 EXIT THEN
+  [ INPUT_RECORD 14 + ] LITERAL W@           \ AsciiChar
+  [ INPUT_RECORD 12 + ] LITERAL W@ 16 LSHIFT OR  \ ScanCode
+  [ INPUT_RECORD  4 + ] LITERAL C@ 24 LSHIFT OR  \ KeyDownFlag
+;
+```
+
+`EKEY` 讀取一個 `INPUT_RECORD` 結構（大小約 20 bytes），解析其中的 `KEY_EVENT`：
+- 低 16 位元：`AsciiChar`
+- 次 16 位元：`wVirtualScanCode`
+- 最高 8 位元：`bKeyDown`（按鍵按下或放開）
+
+這與 POSIX 版直接讀取原始位元組完全不同——POSIX `EKEY` 通常直接回傳終端機輸入的 escape sequence 或 Unicode byte。
+
+### 9.2 高階鍵盤輸入
+
+```forth
+\ spf_win_con_io.f:62-81
+VARIABLE PENDING-CHAR
+
+: KEY? ( -- flag )
+  PENDING-CHAR @ 0 > IF TRUE EXIT THEN
+  BEGIN EKEY? WHILE
+    EKEY EKEY>CHAR
+    IF PENDING-CHAR ! TRUE EXIT THEN
+    DROP
+  REPEAT FALSE
+;
+```
+
+`KEY?` 與 `KEY` 使用 `PENDING-CHAR` 變數作為單字元緩衝區，這與 POSIX 版（`spf_con_io.f`）的 `PENDING-CHAR` 機制完全一致。`EKEY>CHAR`（第 46-52 行）將 `EKEY` 回傳的複合值解碼為 ASCII 字元：若 `KeyDownFlag=0`（放開事件）或 `AsciiChar=0`（功能鍵），則回傳「無字元」。
+
+### 9.3 與 POSIX 控制台 I/O 對照
+
+| 特性 | POSIX（`posix/con_io.f`） | Windows（`spf_win_con_io.f`） |
+|------|--------------------------|-------------------------------|
+| 輸入 API | `read` / `getc` | `ReadConsoleInputA` |
+| 事件類型 | 原始位元流 | `INPUT_RECORD`（鍵盤/滑鼠/視窗） |
+| 特殊鍵處理 | Escape sequence 解析 | `wVirtualScanCode` + `bKeyDown` |
+| 掛起字元緩衝 | `PENDING-CHAR` | `PENDING-CHAR`（相同機制） |
+| 向量設定 | `VECT KEY` | `VECT KEY` + `' KEY1 ' KEY TC-VECT!` |
+
+---
+
+## 10. 模組路徑管理（spf_win_module.f）
 
 Windows 版使用 `GetModuleFileNameA` 取得模組路徑：
 
@@ -595,9 +844,9 @@ Windows 版使用 `GetModuleFileNameA` 取得模組路徑：
 
 ---
 
-## 9. Windows vs POSIX 對照總結
+## 11. Windows vs POSIX 對照總結
 
-### 9.1 FFI 機制對照
+### 11.1 FFI 機制對照
 
 ```
 POSIX：                              Windows：
@@ -606,7 +855,7 @@ dlopen("lib.so") ──→ dlsym ──→     LoadLibraryA("DLL")
 WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 ```
 
-### 9.2 TLS 機制對照
+### 11.2 TLS 機制對照
 
 兩者都使用 `TlsIndex!` / `TlsIndex@` 原語，但：
 
@@ -616,7 +865,7 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 | TLS 解除 | `FREE-THREAD-MEMORY` | `DESTROY-HEAP` |
 | 例外時恢復 | `CONTEXT_EDI + @ TlsIndex!` | SEH `EXCEPTION_POINTERS` |
 
-### 9.3 例外處理對照
+### 11.3 例外處理對照
 
 | 方面 | POSIX | Windows |
 |------|-------|---------|
@@ -625,7 +874,7 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 | 傾印 | `DUMP-TRACE` | `EXC-DUMP1` |
 | 遞迴保護 | `IN-EXCEPTION` | `IN-EXCEPTION` |
 
-### 9.4 執行緒對照
+### 11.4 執行緒對照
 
 | 方面 | POSIX | Windows |
 |------|-------|---------|
@@ -635,7 +884,7 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 | 終止 | `pthread_exit` | `ExitThread` + `DESTROY-HEAP` |
 | ID | `pthread_self` | `GetCurrentThreadId` |
 
-### 9.5 記憶體對照
+### 11.5 記憶體對照
 
 | 方面 | POSIX | Windows |
 |------|-------|---------|
@@ -646,7 +895,7 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 
 ---
 
-## 10. Windows 平台關鍵檔案一覽
+## 12. Windows 平台關鍵檔案一覽
 
 | 檔案 | 主題 | 對應 POSIX 檔案 |
 |------|------|----------------|
