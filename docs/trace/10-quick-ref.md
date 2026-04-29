@@ -13,6 +13,7 @@
 > - [07-optimizer.md](07-optimizer.md) — 巨集最佳化器
 > - [08-append-a.md](08-append-a.md) — IA-32 組語基礎
 > - [09-windows-platform.md](09-windows-platform.md) — Windows 平台
+> - [11-forth-compilation.md](11-forth-compilation.md) — Forth 編譯模式深入
 
 ---
 
@@ -416,7 +417,70 @@ THROW 時：
 
 ---
 
-## 8. 版本與授權資訊
+## 8. Forth 基礎概念速查（給初學者）
+
+本文件預設讀者已熟悉 ANS Forth 94。若你是 Forth 新手，以下最小知識能幫助你理解 trace 內容；完整學習請參考 "Starting Forth" (Brodie) 或 "Thinking Forth" (Brodie)。
+
+### 8.1 堆疊模型
+
+Forth 使用兩個堆疊：**資料堆疊**（Data Stack，SP-Forth 中 TOS 快取於 EAX，EBP 為指標）與**回返堆疊**（Return Stack，對應 ESP）。堆疊注記 `( before -- after )` 左側為執行前（底→頂），右側為執行後。
+
+### 8.2 字詞與字典
+
+每個關鍵字稱為一個**字詞**（word，相當於函式），存於**字典**（單向鏈結串列）。字典項結構：
+
+| 欄位 | 說 明 | 取得方式 |
+|------|-------|----------|
+| NFA（名稱欄位） | 長度前綴 + 字詞名稱 | `>NAME` |
+| LFA（鏈結欄位） | 指向前一個字典項 | `>LINK` |
+| CFA（執行碼欄位） | 指向機器碼入口 | `>CODE` |
+| PFA（參數欄位） | 字詞的資料/參數 | `>BODY` |
+
+`' name` 取得 name 的 XT（執行令牌，即指向 CFA 的指標）；`EXECUTE` 接收 XT 並執行。
+
+### 8.3 編譯 vs 直譯
+
+| 概念 | 說 明 |
+|------|-------|
+| `STATE` | 0 = 直譯模式，非 0 = 編譯模式 |
+| `[` / `]` | 切換到直譯模式 / 切回編譯模式 |
+| `: name ... ;` | 定義新字詞（進入編譯，`;` 結束並回直譯） |
+| `IMMEDIATE` | 標記該字在編譯模式下仍立即執行 |
+| `POSTPONE name` | 將 name 的編譯語意推遲至執行期 |
+| `COMPILE, xt` | 在編譯期將 xt 編入字典 |
+
+### 8.4 常見定義字
+
+| 字 | 效 果 |
+|---|--------|
+| `VARIABLE name` | 建立一個 cell 的變數（執行回傳位址） |
+| `CONSTANT name` | 建立常數（執行回傳值） |
+| `USER name` | 執行緒私有變數（以 EDI 為基底偏移） |
+| `VALUE name` | 可寫的常數（`TO name` 改值） |
+| `CREATE name` | 建立字典項，留參數空間；可用 `DOES>` 自訂執行行為 |
+
+關於 `DOES>`：`CREATE name ... DOES> body` — `name` 被呼叫時執行 `body`，`body` 可存取 `name` 的 PFA 區域。SP-Forth 使用 `(DOES1)`/`(DOES2)` 實作（見 [02-compiler.md §9](02-compiler.md#9-定義字spf_defwordsf-深入解析)）。
+
+### 8.5 例外與向量
+
+| 字 | 效 果 |
+|---|--------|
+| `CATCH` | 執行 XT，捕獲內部 `THROW` |
+| `THROW n` | 拋出例外號碼；0 不拋出 |
+| `VECT name` | 宣告可重定向的字（同 `DEFER`） |
+| `' xt TO name` | 設定 VECT 的行為 |
+
+詳見 [05-io-error-init.md §4](05-io-error-init.md#4-例外處理spf_exceptf)。
+
+### 8.6 參考
+
+- [00-overview.md §8](00-overview.md#8-核心術語速查) — 核心術語對照表
+- **"Starting Forth"** (Leo Brodie) — 經典免費入門書
+- **"Thinking Forth"** (Leo Brodie) — 設計哲學
+
+---
+
+## 9. 版本與授權資訊
 
 - **系統名稱**：SP-Forth/4（ SPF4 ）
 - **核心版本**：429（定義於 `src/spf.f` 第 3 行）
