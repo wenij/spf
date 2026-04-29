@@ -129,10 +129,10 @@ LEA EAX, [EDI] [EAX]     ; 計算 USER 變數位址
 | `spf_win_io.f` | Windows 檔案 I/O | [09-windows-platform.md §8](09-windows-platform.md#8-windows-檔案-iospf_win_iof-深入解析) |
 | `spf_win_except.f` | Windows 例外 façade | [09-windows-platform.md §5](09-windows-platform.md#5-例外處理與-sehspf_win_initf-深入解析) |
 | `spf_win_module.f` | Windows 路徑管理（GetModuleFileName） | [09-windows-platform.md §10](09-windows-platform.md#10-模組路徑管理spf_win_modulef) |
-| `spf_win_conv.f` | 編碼轉換（CharToOemBuffA, OemToCharBuffA） | [09-windows-platform.md](09-windows-platform.md) |
-| `spf_win_cgi.f` | CGI 支援 | [09-windows-platform.md](09-windows-platform.md) |
-| `spf_win_const.f` | Windows 常數 | [09-windows-platform.md](09-windows-platform.md) |
-| `spf_win_proc.f` | Windows 程序管理 | [09-windows-platform.md](09-windows-platform.md) |
+| `spf_win_conv.f` | 編碼轉換（CharToOemBuffA, OemToCharBuffA） | [09-windows-platform.md §12](09-windows-platform.md#12-windows-平台關鍵檔案一覽) |
+| `spf_win_cgi.f` | CGI 支援 | [09-windows-platform.md §12](09-windows-platform.md#12-windows-平台關鍵檔案一覽) |
+| `spf_win_const.f` | Windows 常數 | [09-windows-platform.md §3.1](09-windows-platform.md#31-windows-常數spf_win_constf) |
+| `spf_win_proc.f` | WINAPI: 宣告實例中心庫 | [09-windows-platform.md §2.4](09-windows-platform.md#24-winapi-宣告實例spf_win_procf) |
 
 ### 2.5 交叉編譯器與輔助檔案
 

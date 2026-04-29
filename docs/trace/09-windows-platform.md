@@ -196,11 +196,52 @@ END-CODE
 
 這三個字與 POSIX 版完全對稱，差異僅在 `_WNDPROC-CODE` 內部棧楨設定。
 
+### 2.4 WINAPI: 宣告實例（spf_win_proc.f）
+
+`spf_win_proc.f` 是 **Windows API 函式宣告的中心庫**，所有跨檔案共用的 `WINAPI:` 呼叫集中在這裡。它僅包含 41 行 `WINAPI:` 宣告（不包含任何可執行邏輯）：
+
+```
+WINAPI: GetStdHandle                  KERNEL32.DLL
+WINAPI: CreateFileA                   KERNEL32.DLL
+WINAPI: ReadFile                      KERNEL32.DLL
+WINAPI: WriteFile                     KERNEL32.DLL
+WINAPI: HeapCreate                    KERNEL32.DLL
+...                                   ...
+```
+
+這些宣告在 `spf.f` 載入時解析 DLL 並寫入 `WINAPLINK` 鏈。各功能檔案（`spf_win_io.f`、`spf_win_memory.f` 等）直接使用這些已宣告的名稱，不必重複 `WINAPI:`。這相當於 POSIX 版將 `dlopen`/`dlsym` 快取在符號表中的角色。
+
 ---
 
 ## 3. 記憶體管理（spf_win_memory.f）深入解析
 
-### 3.1 Windows Heap API 對比 POSIX malloc
+### 3.1 Windows 常數（spf_win_const.f）
+
+`spf_win_const.f` 定義 Windows 平台關鍵常數，相當於 POSIX 的 `posix/const.f`：
+
+```forth
+\ spf_win_const.f:10-31
+40   CONSTANT PAGE_EXECUTE_READWRITE    \ VirtualAlloc 頁面保護
+1000 CONSTANT MEM_COMMIT                \ VirtualAlloc 類型
+2000 CONSTANT MEM_RESERVE
+-1   CONSTANT INVALID_HANDLE_VALUE      \ API 錯誤回傳值
+2    CONSTANT CREATE_ALWAYS             \ CreateFile 建立模式
+3    CONSTANT OPEN_EXISTING
+0    CONSTANT FILE_BEGIN                \ SetFilePointer 位移基準
+1    CONSTANT FILE_CURRENT
+```
+
+這些常數分散被 `spf_win_memory.f`（記憶體配置）與 `spf_win_io.f`（檔案 I/O）使用，不包含在對應功能檔案中的原因是：多個檔案共享的底層常數集中定義，避免重複。
+
+此外也定義了 ANSI Forth 94 標準的檔案存取方法（`FAM`）常數：
+
+```forth
+80000000 CONSTANT R/O    \ 唯讀
+40000000 CONSTANT W/O    \ 唯寫
+C0000000 CONSTANT R/W    \ 讀寫
+```
+
+### 3.2 Windows Heap API 對比 POSIX malloc
 
 Windows 版使用 `HeapCreate`/`HeapAlloc` 而非 `malloc`/`mmap`：
 
@@ -212,7 +253,7 @@ Windows 版使用 `HeapCreate`/`HeapAlloc` 而非 `malloc`/`mmap`：
 | `mmap`(MAP_ANONYMOUS) | `HeapAlloc` | 配置匿名記憶體 |
 | — | `HeapCreate`/`HeapDestroy` | 建立/銷毀私有堆 |
 
-### 3.2 執行緒堆積（spf_win_memory.f:50-63）
+### 3.3 執行緒堆積（spf_win_memory.f:50-63）
 
 ```forth
 : SET-HEAP ( heap-id -- )
@@ -239,7 +280,7 @@ Windows 版使用 `HeapCreate`/`HeapAlloc` 而非 `malloc`/`mmap`：
 
 **TLS 整合**：`TlsIndex!` 在 Windows 版同樣存在，用於設定執行緒的 TLS 基底指標。`HeapAlloc` 配置的記憶體區塊由 `TlsIndex!` 寫入第一個 cell，儲存回返位址。
 
-### 3.3 ALLOCATE-RWX 的差異
+### 3.4 ALLOCATE-RWX 的差異
 
 ```forth
 : ALLOCATE-RWX ( +n -- a-addr 0 | x ior )
@@ -901,9 +942,11 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 |------|------|----------------|
 | `spf_win_api.f` | API 呼叫、CALLBACK 橋接 | `posix/api.f` |
 | `spf_win_defwords.f` | WINAPI:、EXTERN、CALLBACK:、TASK | `posix/defwords.f` |
+| `spf_win_proc.f` | WINAPI: 宣告實例中心庫 | `posix/defwords.f`（同層） |
 | `spf_win_mtask.f` | 多執行緒（CreateThread 等） | `posix/mtask.f` |
 | `spf_win_memory.f` | HeapCreate/HeapAlloc | `posix/memory.f` |
 | `spf_win_io.f` | Windows 檔案 I/O | `posix/io.f` |
+| `spf_win_const.f` | 記憶體與檔案 I/O 常數 | `posix/const.f` |
 | `spf_win_conv.f` | 編碼轉換 | — |
 | `spf_win_envir.f` | 環境查詢、錯誤解碼 | `posix/envir.f` |
 | `spf_win_init.f` | 程序初始化、SEH | `posix/init.f` |
