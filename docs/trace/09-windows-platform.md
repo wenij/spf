@@ -359,9 +359,9 @@ Windows 版的 `TERMINATE` 在結束前銷毀執行緒堆積（`DESTROY-HEAP`）
   8 CELLS 80 + 11 CELLS +         ; 跳到通用暫存器區域
   AT-EXC-DUMP                       ; 可擴充傾印點
 
-  R> R@ 10 CELLS + @ ( esp )      ; 從 Context 提取 ESP
+  R@ 10 CELLS + @ ( esp )         ; 從 Context 提取 ESP
   R@ 5 CELLS + @ ( eax )          ; 提取 EAX
-  R@ 6 CELLS + @ ( ebp )           ; 提取 EBP
+  R> 6 CELLS + @ ( ebp )           ; 提取 EBP
   DUMP-TRACE-USING-REGS
   FALSE IN-EXCEPTION !
 ;
