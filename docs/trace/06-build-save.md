@@ -19,10 +19,12 @@ Makefile（`src/Makefile`）管理 SP-Forth 的完整建構流程，支援 POSIX
 ```makefile
 ifeq ($(OSTYPE),cygwin)
   platform := win32
-else ifeq ($(OS),Windows_NT)
+else
+ifeq ($(OS),Windows_NT)
   platform := win32
 else
   platform := posix
+endif
 endif
 ```
 
@@ -271,7 +273,7 @@ TRUE TO SMALLEST-SPF
 ```forth
 SMALLEST-SPF [IF]
 FALSE TO BUILD-OPTIMIZER      \ 不包含最佳化器
-TRUE VALUE USE-OPTIMIZER        \ 使用宿主最佳化器
+TRUE TO USE-OPTIMIZER         \ 使用宿主最佳化器
 TRUE TO OPTIMIZE-BY-SIZE       \ 以大小最佳化
 [THEN]
 ```
