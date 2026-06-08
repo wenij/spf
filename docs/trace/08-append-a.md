@@ -1021,12 +1021,131 @@ RET
 
 > data stack pointer，且 `[EBP]` 是次堆疊項
 
+#### 7.1.1 對照表
+
+| 你以為的 C 語意 | 真正的 SP-Forth 語意 |
+|------------------|----------------------|
+| `EBP` 是函式的 frame pointer | `EBP` 是 data stack pointer |
+| `[EBP-4]` 是 local variable | `[EBP-4]` 還是堆疊，只是位置在 `EBP` 下方一格 |
+| `push %rbp; mov %rsp,%rbp` 的固定 prologue | 沒有 prologue；`EBP` 從開機就由 VM 自己維持 |
+| `[EBP+8]` 才是呼叫者的參數 | `[EBP]` 永遠是「上一個被推上去的值」 |
+
+#### 7.1.2 用 `DUP` 當例子
+
+`DUP` 的 kernel primitive 真的就是這兩條：
+
+```asm
+LEA EBP, -4 [EBP]      ; data stack 往下移一格
+MOV [EBP], EAX         ; 把 TOS 寫到新的 TOS 位置
+```
+
+如果硬把它當 C frame 看，就會卡在：
+
+- 為什麼 `LEA EBP, -4[EBP]` 是「宣告一個 local」而不是「調整 sp」？
+- 為什麼「函式入口」沒有 `push ebp; mov ebp, esp`？
+
+把 `EBP` 翻成「data stack pointer」之後，兩條指令的語意馬上變成：
+
+1. 把 stack pointer 往下移 1 cell，騰出一格空間。
+2. 把目前 TOS 寫進這格新空間。完成後，stack 變成「原本 TOS、原本 TOS」。
+
+#### 7.1.3 反例：什麼時候 `EBP` **不是** data stack pointer
+
+少數情況下 `EBP` 暫時不是 data stack pointer，例如 `_WNDPROC-CODE`：
+
+```forth
+CODE _WNDPROC-CODE
+     MOV  EAX, ESP        \ 暫時把 ESP 的位置交給 EAX
+     SUB  ESP, # 3968
+A;   HERE 4 - ' ST-RES 9 + EXECUTE
+     ...
+     RET
+END-CODE
+```
+
+這裡 `MOV EAX, ESP` 是在保護 x86 stack 的當前位置，準備在 Windows callback 結束時用 `ST-RES` 還原。所以讀到 `EAX` / `EBP` 的時候還是要看「這段是在做什麼事」，不要無條件套用 TOS / data stack pointer 規則。
+
+#### 7.1.4 簡單的閱讀清單
+
+讀到任何 `EBP` 時，依序問自己：
+
+1. 這段是在 SP-Forth 的 data stack 邏輯裡，還是在保護某個 x86 / OS 結構？
+2. `[EBP]` 是「次堆疊項」嗎？
+3. 這條指令是要調整 stack 位置（`LEA`）還是真的讀寫資料（`MOV`）？
+
+#### 7.1.5 常見誤讀示意
+
+```text
+以為：                                事實：
+┌──────────┐                          ┌──────────┐
+│ return   │ ← EBP+4                  │ 舊 TOS   │ ← EBP   (= 次堆疊項)
+├──────────┤                          ├──────────┤
+│ locals   │ ← EBP                    │  TOS     │ ← EAX
+├──────────┤                          ├──────────┤
+│ args     │ ← EBP-8                  │  (尚未寫入) │ ← EBP-4 (空)
+```
+
+左邊是 C 函式的 frame；右邊是 SP-Forth 的 data stack 形狀。差異在「`EBP` 指向哪一格」與「下一格是不是 caller 的區域」。
+
 ---
 
 ### 7.2 不要把 `CODE` 和 metacompiler byte emission 混成一類
 
-- `CODE ... END-CODE`：定義執行期原語
-- `C,` / `,` / `RET,` / `TC-CALL,`：在編譯期組 machine code
+兩者的「產出物」長得很像，都是 x86 bytes，但發生時間完全不同：
+
+| 寫法 | 發生時間 | 產出 | 看到的程式碼 |
+|------|----------|------|---------------|
+| `CODE ... END-CODE` | target 載入後執行某字時 | 一塊會被 CPU 跑到的 machine code | 直接的組語指令 |
+| `C,` / `,` / `W,` / `RET,` | 編譯期 | target image 裡的 bytes | Forth 程式碼呼叫 emit 字 |
+
+#### 7.2.1 `CODE ... END-CODE` 是 runtime primitive
+
+`CODE` 區塊定義的是一個 Forth word，執行這個 word 時，CPU 就會跑你寫進去的機器碼。
+
+```forth
+CODE NOP-LIKE ( x -- x )
+     RET
+END-CODE
+```
+
+執行 `NOP-LIKE` 時，CPU 拿到一條 `RET`，馬上把控制權交回去。`NOP-LIKE` 的執行碼欄位（CFA）就是這一條 `0xC3`。
+
+#### 7.2.2 `C,` / `,` 是 compile-time byte emission
+
+`C,` 把一個 byte 寫到 DP；`,` 把一個 cell 寫到 DP。它們**不會自己執行任何機器碼**——只是在擴充正在被編譯的那塊 target image。
+
+```forth
+: TC-CALL, ( addr -- )
+  ?SET
+  SetOP
+  0E8 C,              \ 寫出 CALL opcode（執行時才會被 CPU 解讀）
+  DP @ CELL+ - ,
+  DP @ TO LAST-HERE
+;
+```
+
+這段程式碼執行時（編譯期），它把：
+
+- `0xE8`（CALL rel32 的 opcode）
+- 一個 4-byte 的相對位移
+
+寫進 target dictionary。target 執行到這個位置時，CPU 才看到一條 `CALL`。
+
+#### 7.2.3 混用的陷阱
+
+| 情境 | 你以為 | 實際 |
+|------|--------|------|
+| 在 `CODE` 區塊裡看到 `RET` | 編譯期寫出 `0xC3` | runtime 立即返回上一層 |
+| 在 `:` 定義裡看到 `0xC3 C,` | runtime 執行 `0xC3` | compile-time 寫一個 byte 進 image |
+| 兩者都有名字 `RET` | 同一個 word | 不同 word；compile-time 版本叫 `RET,`（多一個逗號） |
+
+#### 7.2.4 快速判斷法
+
+讀到一段組語時，問自己：
+
+1. 這段是被 `CODE` 還是 `:` 包起來？
+2. 如果是 `CODE`，那這段是**這個 word 被呼叫時**才會跑。
+3. 如果是 `:` 或在 high-level 編譯輔助字裡，那 `C,` / `,` / `W,` 是把 bytes 寫進 image，不是執行。
 
 ---
 
@@ -1038,6 +1157,61 @@ RET
 - index scaling
 - embedded data 回退
 
+#### 7.3.1 LEA 不碰記憶體，但會算位址
+
+```asm
+LEA EBP, -4 [EBP]      ; EBP -= 4（data stack 推入一格）
+LEA EBP,  4 [EBP]      ; EBP += 4（data stack 取出一格）
+LEA EAX, [EBX + ECX*4] ; EAX = EBX + ECX*4（純計算）
+```
+
+第一條不是「取某個 local 的位址」，而是「把 data stack pointer 往下移一格」。
+
+#### 7.3.2 三種常見用途對照
+
+| 用途 | 形式 | 例子 |
+|------|------|------|
+| stack push | `LEA EBP, -N [EBP]` | `LEA EBP, -4 [EBP]` = 把 data stack 推入一格 cell |
+| stack pop | `LEA EBP, +N [EBP]` | `LEA EBP, 4 [EBP]` = 把 data stack 取出一格 cell |
+| scaled index | `LEA EAX, [base + idx*scale + disp]` | `LEA EAX, [EBX + ECX*4]` = 算陣列元素的位址 |
+
+#### 7.3.3 embedded data 回退：`_TOVALUE-CODE`
+
+```forth
+CODE _TOVALUE-CODE
+     POP EBX                 \ 取回 x86 return address
+     LEA EBX, -9 [EBX]       \ 把 return address 倒推到「嵌入 value cell」位置
+     MOV [EBX], EAX          \ 把新值寫入該 cell
+     ...
+     RET
+END-CODE
+```
+
+這條 `LEA EBX, -9 [EBX]` 是用 `LEA` 從 return address 倒推回嵌在 code stream 裡的 value 欄位。`9` 不是魔術數字，而是這段從 `CALL` 起到 value cell 之間所有 byte 的長度。
+
+#### 7.3.4 怎麼快速判斷 `LEA` 在做什麼
+
+| 看到 | 第一個猜測 |
+|------|------------|
+| `LEA EBP, ±N [EBP]` | 推/取 data stack |
+| `LEA ESP, ±N [ESP]` | 推/取 x86 return stack |
+| `LEA reg, [base + idx*scale + disp]` | 算陣列元素位址，或 `MOV` 結果的替代 |
+| `LEA reg, [reg - 常數]` | 從 return address 回推 embedded data |
+
+#### 7.3.5 跟 `MOV` / `SUB` 的差別
+
+| 想做的事 | 寫法 | 為什麼常被誤用 |
+|----------|------|----------------|
+| data stack 推入一格 | `LEA EBP, -4 [EBP]` | 看起來像「取位址」，其實是「移動 SP」 |
+| 真的讀 `[EBP-4]` 內容 | `MOV reg, -4 [EBP]` | 會觸發記憶體讀取，語意完全不同 |
+| 純加法但不想動 flags | `LEA EAX, 4 [EAX]` | 與 `ADD EAX, #4` 等價，但不會改 flags |
+
+#### 7.3.6 為什麼 SP-Forth 偏愛 `LEA`？
+
+- 不改 flags，下一段邏輯不會被前一段影響。
+- 不用先 `MOV` 到另一個暫存器再運算。
+- 對 `EBP` 的 push/pop 來說，**只有 `LEA` 才能表達「我要的不是值，是 stack 位置」**。
+
 ---
 
 ### 7.4 看到 `A;` 時，要切換成「assembler 不是純文字，而是可編程工具」的心智模型
@@ -1047,6 +1221,76 @@ RET
 - 組語不是被動語法
 - 它可以和 Forth 的 metaprogramming 混在一起
 - 你可以一邊輸出 bytes，一邊運算、修補、植入資料
+
+#### 7.4.1 `A;` 是什麼
+
+`lib/asm/486asm.f` 對 `A;` 的定義是：
+
+```forth
+: A; ( FINISH THE ASSEMBLY OF THE PREVIOUS INSTRUCTION )
+        0 DO-OPCODE ;
+```
+
+它本身**不是** x86 指令。它告訴 assembler：「把前一條 assembler 指令收尾，確定 bytes 都已經寫出來了。」
+
+#### 7.4.2 為什麼需要 `A;`？
+
+在 SP-Forth assembler 裡：
+
+- `MOV EAX, # 5` 這種 immediate 形式，需要等 Forth 算出 immediate 才能寫出完整 bytes。
+- Assembler 會延後真正 emit，直到它能確定所有 operand 都齊全。
+
+如果中間想「先回到 Forth 算點東西，再繼續寫組語」，就需要 `A;` 強迫 assembler 把前一條指令收尾，然後切換到 Forth 模式。
+
+#### 7.4.3 實例：`_WNDPROC-CODE` 的 stack reservation
+
+```forth
+CODE _WNDPROC-CODE
+     MOV  EAX, ESP        \ 保留目前的 ESP
+     SUB  ESP, # 3968
+A;   HERE 4 - ' ST-RES 9 + EXECUTE
+     ...
+     RET
+END-CODE
+```
+
+逐行解讀：
+
+1. `MOV EAX, ESP`：把目前 ESP 存到 `EAX`。
+2. `SUB ESP, # 3968`：保留 3968 bytes 給 Windows callback 用。`A;` 之前 assembler 還沒把這條 SUB 收尾。
+3. `A;`：完成 SUB 的 emit，bytes 都在 dictionary 裡了。
+4. `HERE 4 -`：回到剛剛 emit 出去的 immediate 欄位（4 byte 的 `3968`）。
+5. `' ST-RES 9 + EXECUTE`：呼叫一個 Forth word，把 `ST-RES` 的位址加 9（這條指令之後的位移），用 Forth 邏輯把這個欄位補成「回填位置」。
+
+#### 7.4.4 心智模型切換
+
+讀到 `A;` 時，要把腦袋切換成「**我正在寫一個可以呼叫 Forth 的組語組裝器**」：
+
+```text
+平常讀組語：                    讀到 A; 時：
+  指令 → 指令 → 指令               指令 → 指令 → [回到 Forth]
+                                       ↑                  ↓
+                                       └── A; 把前一條收尾 ──┘
+                                                  ↓
+                                       Forth 計算、修補、emit
+                                                  ↓
+                                       [切回 assembler] → 指令
+```
+
+也就是說，`A;` 讓你在兩條 machine code 指令之間插入「任意 Forth 程式」，而不是只能單純接續下一條組語。
+
+#### 7.4.5 常見的 `A;` 用法
+
+| 用法 | 模式 |
+|------|------|
+| 回填剛 emit 的欄位 | `A; HERE N - ' something EXECUTE` |
+| 在 code stream 裡塞 runtime 計算的常數 | `A; HERE ... ,` |
+| 把 branch target 留給 Forth 算 | `A; HERE ... !` |
+| 切換到其他 wordlist / state | `A; ['] ... EXECUTE` |
+
+#### 7.4.6 為什麼這對讀 SP-Forth 很重要
+
+SP-Forth 不是「先寫好組語字串再 emit」，而是「**邊組邊算**」。`A;` 是這個模型最重要的開關。看到 `A;` 時，要準備好「接下來是 Forth 邏輯，後面才再回到 assembler」，這樣讀 metacompiler 與 cross-compiler 章節才不會卡住。
 
 ---
 
