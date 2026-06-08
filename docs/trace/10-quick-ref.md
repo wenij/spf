@@ -95,11 +95,11 @@ LEA EAX, [EDI] [EAX]     ; 計算 USER 變數位址
 | `spf_defwords.f` | 定義字定義（SHEADER, CREATE, VARIABLE） | [02-compiler.md §9](02-compiler.md#9-定義字spf_defwordsf-深入解析) |
 | `spf_immed_transl.f` | 立即字—直譯分支（TO, POSTPONE, ;） | [02-compiler.md §12](02-compiler.md#12-立即字--直譯分支spf_immed_translf-深入解析) |
 | `spf_immed_lit.f` | 立即字—常值分支（LITERAL, SLITERAL） | [02-compiler.md §13](02-compiler.md#13-立即字--常值分支spf_immed_litf-深入解析) |
-| `spf_literal.f` | 常值編譯（?LITERAL1, HEX-SLITERAL） | [02-compiler.md §14](02-compiler.md#14-常值編譯spf_literalf-深入解析) |
-| `spf_immed_control.f` | 控制結構立即字（IF/THEN/ELSE） | [02-compiler.md §16](02-compiler.md#16-控制結構立即字spf_immed_controlf-深入解析) |
-| `spf_immed_loop.f` | 迴圈立即字（DO/LOOP/+LOOP） | [02-compiler.md §17](02-compiler.md#17-迴圈立即字spf_immed_loopf-深入解析) |
+| `spf_literal.f` | 常值編譯（?LITERAL1, HEX-SLITERAL） | [02-compiler.md §13](02-compiler.md#13-立即字--常值分支spf_immed_litf-spf_literalf-深入解析) |
+| `spf_immed_control.f` | 控制結構立即字（IF/THEN/ELSE） | [02-compiler.md §14](02-compiler.md#14-控制結構spf_immed_controlf-spf_immed_loopf-深入解析) |
+| `spf_immed_loop.f` | 迴圈立即字（DO/LOOP/+LOOP） | [02-compiler.md §14](02-compiler.md#14-控制結構spf_immed_controlf-spf_immed_loopf-深入解析) |
 | `spf_modules.f` | 模組載入（MODULE:, EXPORT, {{） | [02-compiler.md §15](02-compiler.md#15-模組載入spf_modulesf-深入解析) |
-| `spf_inline.f` | 內聯展開（>R, R>, RDROP 內聯版） | [02-compiler.md §18](02-compiler.md#18-內聯展開spf_inlinef-深入解析) |
+| `spf_inline.f` | 內聯展開（>R, R>, RDROP 內聯版） | [02-compiler.md §16](02-compiler.md#16-內聯展開spf_inlinef-深入解析) |
 
 ### 2.3 POSIX 平台（src/posix/）
 
@@ -450,7 +450,7 @@ REQUIRE ANSI lib/include/ansi.f
 | EXCEPTION | 內建 `CATCH` / `THROW` 與平台 signal/SEH bridge | `src/spf_except.f`, POSIX signal, Windows SEH | [05-io-error-init.md §4](05-io-error-init.md#4-例外處理spf_exceptf), [12-debugging.md](12-debugging.md) |
 | LOCALS | 有核心支援片段，但使用面需對照 include / extension | `N>R` / `NR>` 等 primitive，相關 locals library | [01-kernel.md §3.7](01-kernel.md#37-locals區域變數原語) |
 | SP-Forth FFI | 非 ANS extension，SP-Forth 平台能力 | POSIX `EXTERN` / `(( ... ))`，Windows `WINAPI:` | [04-posix-platform.md](04-posix-platform.md), [09-windows-platform.md](09-windows-platform.md), [13-verification.md §6](13-verification.md#6-ffi-安全檢查) |
-| SP-Forth image save | 非 ANS extension，系統能力 | `SAVE`, `SAVE-WITH-RESERVE`, ELF/PE writer | [06-build-save.md](06-build-save.md) |
+| SP-Forth image save | 非 ANS extension，系統能力 | `SAVE`, `SAVE-WITH-RESERVE`, ELF/PE writer | [06-build-save.md](06-build-save.md), [15-standalone-executable.md](15-standalone-executable.md) |
 | SP-Forth optimizer | 非 ANS extension，native code generation 能力 | `macroopt.f`, `noopt.f` | [07-optimizer.md](07-optimizer.md) |
 
 ### 8.2 驗證與測試線索
