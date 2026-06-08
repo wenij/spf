@@ -27,7 +27,7 @@ spf_read_source.f   ← 原始碼讀取（REFILL, SOURCE, INCLUDED 等）
 spf_nonopt.f        ← 非最佳化字集（RDROP, >R, R>, EXECUTE 等）
 spf_compile0.f      ← 基本編譯控制（DP, ALLOT, ,, C, 等）
 → [macroopt.f 或 noopt.f]  ← 巨集最佳化器
-spf_compile.f       ← 主要編譯器（COMPILE, MCOMPILE, CON>LIT, HERE, BRANCH, 等）
+spf_compile.f       ← 主要編譯器（COMPILE,, HERE, BRANCH,；透過 CON>LIT/INLINE? hook 接上最佳化器）
 spf_wordlist.f      ← 詞彙表管理（WORDLIST, SEARCH-WORDLIST, +SWORD, 名稱存取等）
 spf_find.f          ← 搜尋引擎（SFIND, FIND1, CDR-BY-NAME, 搜尋順序等）
 spf_find_cdr.f      ← CDR-BY-NAME 組合語言最佳化版本（由 spf_find.f 內部 `INCLUDED`）
@@ -710,18 +710,15 @@ END-CODE
 ```
 COMPILE, ( xt )
   │
-  ├─ CON>LIT 偵測到常數摺疊機會？
-  │    ├─ 是 → 進行內聯最佳化（不再產生 CALL）
-  │    │    ├─ INLINE? 偵測到短定義？
-  │    │    │    ├─ 是 → INLINE,（內聯展開）
-  │    │    │    └─ 否 → _COMPILE,（產生 CALL）
-  │    └─ 否 → 什麼都不做（常數已被摺疊，無需產生代碼）
+  ├─ CON>LIT 回傳 FALSE？
+  │    └─ 是 → CON>LIT 已完成常數/USER/CREATE 等特殊編譯，COMPILE, 不再產生代碼
   │
-  └─（無常數摺疊機會）
-       └─ 無動作（由前一階段的代碼處理）
+  └─ CON>LIT 回傳 TRUE（仍需一般編譯）
+       ├─ INLINE? 回傳 TRUE → INLINE,（內聯展開）
+       └─ INLINE? 回傳 FALSE → _COMPILE,（產生 CALL）
 ```
 
-注意：`COMPILE,` 在 `CON>LIT` 回傳 false 時不做任何事——這是因為 `CON>LIT` 可能已經處理了編譯（如常數摺疊），所以不需要額外的代碼。
+注意：`CON>LIT` 的布林語意容易誤讀。它回傳 **FALSE** 時，代表自己已經處理完成（例如把 `CONSTANT`、`USER`、`CREATE` 類定義轉成 literal 或特殊內聯序列），因此外層 `COMPILE,` 不再產生一般 `CALL`。它回傳 **TRUE** 時，才表示需要繼續走 `INLINE?` / `_COMPILE,` 的一般路徑。
 
 ### 8.3 LIT,：常值編譯
 
@@ -1922,9 +1919,10 @@ CASE 結構的編譯期堆疊追蹤：
 
 ```
 COMPILE, ( xt )
-  ├─ CON>LIT 偵測到常數摺疊？ → 處理常數摺疊
-  ├─ INLINE? 偵測到短定義？   → INLINE,（內聯展開）
-  └─ 都不是                   → _COMPILE,（產生 CALL）
+  ├─ CON>LIT 回傳 FALSE？ → 已由 CON>LIT 處理（常數/USER/CREATE 等特殊序列）
+  └─ CON>LIT 回傳 TRUE？
+       ├─ INLINE? 偵測到短定義？ → INLINE,（內聯展開）
+       └─ 否                    → _COMPILE,（產生 CALL）
 ```
 
 `INLINE?` 檢查一個字的機器碼是否短到值得內聯（通常 ≤ 10~15 位元組）。`INLINE,` 將目標字的機器碼直接拷貝到目前編譯位置，省去 CALL/RET 的開銷。
@@ -1946,9 +1944,9 @@ COMPILE, ( xt )
 │       ├── SFIND 搜尋                                                │
 │       │    ├── 找到，旗標 = -1（非立即字）                          │
 │       │    │    ├── STATE = 編譯模式 → COMPILE,                     │
-│       │    │    │    ├── CON>LIT → 常→內聯 → INLINE,               │
-│       │    │    │    ├── CON>LIT → 短定義 → INLINE,                  │
-│       │    │    │    └── 無最佳化 → _COMPILE,（產生 CALL）           │
+│       │    │    │    ├── CON>LIT 已處理 → 不再產生一般 CALL          │
+│       │    │    │    ├── CON>LIT 需續編 + INLINE? → INLINE,          │
+│       │    │    │    └── CON>LIT 需續編 + 非內聯 → _COMPILE,         │
 │       │    │    └── STATE = 直譯模式 → EXECUTE                       │
 │       │    │                                                        │
 │       │    ├── 找到，旗標 = 1（立即字）                              │
@@ -1988,7 +1986,7 @@ COMPILE, ( xt )
     ┌─────────▼──────┐ ┌──────▼───────┐ ┌──────▼───────┐
     │ spf_compile.f  │ │ spf_literal.f│ │ spf_defwords.f│
     │ COMPILE,       │ │ ?SLITERAL    │ │ SHEADER等    │
-    │ CON>LIT,       │ │ LITERAL      │ │ CREATE等     │
+    │ CON>LIT hook   │ │ LITERAL      │ │ CREATE等     │
     │ INLINE         │ │ 2LITERAL     │ │ DOES>        │
     └────────┬───────┘ └──────────────┘ └───────────────┘
              │
@@ -2006,7 +2004,7 @@ COMPILE, ( xt )
 
 1. **TOS-in-EAX 模型貫穿全域**：從 `LIT,` 的 `MOV EAX, #imm32` 到 `>R` 的堆疊操作，所有編譯決策都圍繞 EAX 作為 TOS 快取的模型設計。
 
-2. **三層編譯策略**：`COMPILE,` → `CON>LIT`（常數摺疊）→ `INLINE?`（內聯展開）→ `_COMPILE,`（普通呼叫），形成遞進的最佳化策略。
+2. **三層編譯策略**：`COMPILE,` 先呼叫 `CON>LIT`；若 `CON>LIT` 已處理特殊序列則停止，否則再走 `INLINE?`（內聯展開）或 `_COMPILE,`（普通呼叫），形成遞進的最佳化策略。
 
 3. **條件跳躍的 opcode 可變性**：`?BRANCH,` 中的 `J_COD` 變數允許最佳化器修改條件碼（如 JZ → JNZ），實現 `IF/THEN` 和 `UNTIL` 的統一處理。
 
