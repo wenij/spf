@@ -212,7 +212,7 @@ TO-LOG 使用 `0 THEN 2DROP` 模式：若 `WRITE-FILE` 失敗（回傳非零 ior
 ```forth
 : ACCEPT1 ( c-addr +n1 -- +n2 )
   OVER SWAP H-STDIN READ-LINE        \ 從標準輸入讀取一行
-  DUP 109 = IF DROP -1002 THEN THROW \ pipe 斷線處理（errno=109=EPIPE？）
+  DUP 109 = IF DROP -1002 THEN THROW \ pipe 斷線相容處理（109 = Windows ERROR_BROKEN_PIPE）
   0= IF -1002 THROW THEN             \ 讀取 0 位元組 → 輸入結束
   TUCK TO-LOG                        \ 寫入日誌
   EOLN TO-LOG                        \ 寫入換行
@@ -220,7 +220,7 @@ TO-LOG 使用 `0 THEN 2DROP` 模式：若 `WRITE-FILE` 失敗（回傳非零 ior
 ```
 
 三條路徑：
-1. **errno 109（EPIPE）**：管道斷線，THROW -1002
+1. **錯誤碼 109（Windows ERROR_BROKEN_PIPE 相容處理）**：管道斷線，THROW -1002。POSIX 的 `EPIPE` 通常不是 109，因此這裡不要理解成 POSIX errno 名稱。
 2. **讀取長度為 0**：檔案結束，THROW -1002
 3. **正常讀取**：回傳長度，並寫入日誌
 
@@ -1850,7 +1850,7 @@ CODE API-CALL ( ... extern-addr -- x )
 END-CODE
 ```
 
-API-CALL 將資料堆疊上的引數複製到呼叫堆疊（Windows API 使用 cdecl 呼叫約定，引數在堆疊上），呼叫 API 函數，然後根據回傳的 ESP 偏移量調整資料堆疊。
+API-CALL 將資料堆疊上的引數複製到呼叫堆疊。Win32 API 通常使用 stdcall（被呼叫者清理堆疊），而這段程式會在呼叫後比較 `EBP` / `ESP` 的差值，據此調整 Forth 資料堆疊，反映 API 實際消耗的引數數量。
 
 值得注意的是 15 個 CELL（60 位元組）的限制：Windows API 最多可傳遞 15 個 32 位元引數。`SUB EBP, EBX` 會根據 API 函數實際消耗的引數數量調整堆疊。
 
