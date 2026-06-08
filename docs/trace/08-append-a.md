@@ -559,10 +559,91 @@ END-CODE
 | 記憶體位移 | `4 [EAX]` | `[eax+4]` |
 | 負偏移 | `-9 [EBX]` | `[ebx-9]` |
 | 雙基底感 | `[EDI] [EBX]` | `[edi+ebx]` |
+| 縮放索引 | `[EAX*4]` | `[eax*4]` |
+| 明確 byte 大小 | `BYTE [EAX]` | byte ptr `[eax]` |
+| 明確 word 大小 | `WORD [EAX]` | word ptr `[eax]` |
+| 明確 dword 大小 | `DWORD [EAX]` | dword ptr `[eax]` |
+| 短跳躍 | `JNZ SHORT @@1` | 8-bit relative branch |
 | 原始 byte | `0E8 C,` | emit `0xE8` |
+| 原始 word | `TRUE W,` | emit 16-bit word |
 | 原始 cell | `,` | emit one cell / rel32 / literal |
 
 其中 **`#` 表示 immediate value**，這點是讀 source 時最常遇到、也最值得先記住的 SP-Forth assembler 習慣。
+
+### 5.2a 大小修飾詞：`BYTE` / `WORD` / `DWORD`
+
+有些 x86 指令只看運算元語法無法判斷要讀寫幾個 byte，這時 SP-Forth assembler 會用大小修飾詞：
+
+```forth
+MOVZX EAX, BYTE [EAX]   \ 讀 1 byte，零擴展到 EAX
+MOVZX EAX, WORD [EAX]   \ 讀 2 bytes，零擴展到 EAX
+MOV WORD [EAX], DX      \ 寫 2 bytes
+MOV DWORD [EAX], # 0    \ 寫 4 bytes 的 0
+```
+
+常見規則：
+
+| 修飾詞 | 大小 | 常見用途 |
+|--------|------|----------|
+| `BYTE` | 8-bit | `C@`、字元、低位 byte |
+| `WORD` | 16-bit | `W@` / `W!`、x86 16-bit 欄位 |
+| `DWORD` | 32-bit | cell、位址、一般 IA-32 整數 |
+
+### 5.2b `MOVZX` / `MOVSX`：讀小型資料時的擴展
+
+讀取 byte/word 到 32-bit 暫存器時，不能只看低位元。SP-Forth 常用：
+
+```forth
+MOVZX EAX, BYTE [EAX]   \ zero-extend：高位補 0
+MOVSX EAX, AL           \ sign-extend：依符號位擴展
+```
+
+`MOVZX` 適合字元與無號欄位，例如 `C@`；`MOVSX` 適合要保留符號語意的小整數。
+
+### 5.2c `SHORT` 與區域標籤 `@@1:`
+
+source 裡常見：
+
+```forth
+JL SHORT @@1
+  MOV EAX, EDX
+@@1:
+```
+
+- `@@1:` 定義區域標籤。
+- `@@1` 引用這個標籤。
+- `SHORT` 要求使用 8-bit signed displacement，目標必須在大約 ±128 bytes 內。
+
+這能產生較短的跳躍指令；若距離太遠，就不能使用 `SHORT`。
+
+### 5.2d `REPZ` / `REPNZ` 字串指令前綴
+
+SP-Forth 的字串與記憶體搬移原語會看到 x86 string instruction：
+
+```forth
+REP MOVS DWORD      \ 依 ECX 次數搬移 dword
+REPZ SCAS BYTE      \ 掃描 byte，ZF 條件成立時持續
+```
+
+讀法：
+
+| 寫法 | 意義 |
+|------|------|
+| `REP` | 重複執行 ECX 次 |
+| `REPZ` / `REPE` | ZF=1 時重複 |
+| `REPNZ` / `REPNE` | ZF=0 時重複 |
+
+這些指令通常會同時使用 `ESI`、`EDI`、`ECX`，所以讀到它們時要先找這三個暫存器如何被設定。
+
+### 5.2e `FS:` segment override
+
+少數程式碼會出現：
+
+```forth
+MOV EAX, FS: [EAX]
+```
+
+`FS:` 是 x86 segment override。它不是一般記憶體定址，而是透過特定 segment base 存取資料；在作業系統或 TLS 相關程式碼中很常見。SP-Forth 原始碼中可在 `FS@` / `FS!` 看到 `FS: [EAX]` 形式；讀到這類寫法時，通常要聯想到 thread-local storage 或平台相關執行環境。
 
 ---
 
@@ -595,7 +676,7 @@ RET
 
 ---
 
-### 5.4 `C,` 與 `,`：什麼時候用？
+### 5.4 `C,`、`W,` 與 `,`：什麼時候用？
 
 #### `C,`
 適合輸出單一 opcode byte：
@@ -606,6 +687,13 @@ RET
 0xC3 C,  \ RET
 ```
 
+#### `W,`
+適合輸出 16-bit word：
+
+```forth
+TRUE W, TRUE W,   \ 常見於手工輸出 32-bit -1 時拆成兩個 word
+```
+
 #### `,`
 適合輸出 cell / rel32 / literal：
 
@@ -614,6 +702,35 @@ DP @ CELL+ - ,
 ```
 
 這種組合在 `src/compiler/spf_compile.f` 和 `src/tc_spf.F` 非常常見。
+
+| 字 | 輸出大小 | 常見用途 |
+|----|----------|----------|
+| `C,` | 1 byte | opcode、ModR/M byte、短立即數 |
+| `W,` | 2 bytes | 16-bit 立即數或拆分輸出 |
+| `,` | 1 cell（IA-32 上 4 bytes） | rel32、位址、cell literal |
+
+### 5.5 `SetOP` / `?SET` / `DP @`：compiler 裡的組碼基礎設施
+
+讀 [03-cross-compiler.md](03-cross-compiler.md) 或 [07-optimizer.md](07-optimizer.md) 時，會看到：
+
+```forth
+?SET
+SetOP
+0E8 C,
+DP @ CELL+ - ,
+DP @ TO LAST-HERE
+```
+
+這些不是 CPU 指令，而是編譯器/最佳化器基礎設施：
+
+| 字 | 用途 |
+|----|------|
+| `DP @` | 目前字典指標 / 下一個要輸出的位址 |
+| `SetOP` | 告訴 optimizer「這裡開始是一條新機器碼指令」 |
+| `?SET` | 檢查 / 修正 optimizer 追蹤的狀態 |
+| `LAST-HERE` | 記錄最近機器碼邊界，供後續最佳化/回填使用 |
+
+因此 `TC-CALL,` 裡的 `0E8 C,` 不是「立刻 CALL」，而是把 CALL opcode 寫進 target image；`DP @ CELL+ - ,` 則寫入 rel32 displacement。
 
 ---
 
