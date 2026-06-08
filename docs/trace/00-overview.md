@@ -346,10 +346,14 @@ RET
 4. `01-kernel.md`：理解 TOS-in-EAX、定義字與核心原語。
 5. `02-compiler.md`：理解 parser / search-order / interpreter / compiler。
 6. `03-cross-compiler.md`：理解 host / target / meta-compilation。
-6. `07-optimizer.md`：理解最佳化器如何介入目標機器碼生成。
-7. `04-posix-platform.md`：理解 POSIX 平台抽象、FFI、執行緒與信號。
-8. `05-io-error-init.md`：理解 I/O、例外、初始化與互動式迴圈。
-9. `06-build-save.md`：最後再看建構與映像輸出細節，最容易對上前面概念。
+7. `07-optimizer.md`：理解最佳化器如何介入目標機器碼生成。
+8. `04-posix-platform.md`：理解 POSIX 平台抽象、FFI、執行緒與信號。
+9. `05-io-error-init.md`：理解 I/O、例外、初始化與互動式迴圈。
+10. `06-build-save.md`：最後再看建構與映像輸出細節，最容易對上前面概念。
+11. `14-walkthrough.md`：用一個小字詞端到端串起 parser、compiler、optimizer、target image 與 runtime startup。
+12. `15-standalone-executable.md`：深入理解 `SAVE` / `SAVE-WITH-RESERVE` 如何把目前 Forth 系統映像儲存成可直接執行的 ELF / PE。
+13. `12-debugging.md`：當你已理解主流程後，建立故障排查路徑：build、runtime、compiler、optimizer、FFI、image 問題各自怎麼切層。
+14. `13-verification.md`：理解修改後如何驗證 primitive、compiler、optimizer、platform、ELF/PE image 與 FFI safety。
 
 ### 7.2 文件索引
 
@@ -366,6 +370,10 @@ RET
 | [09-windows-platform.md](09-windows-platform.md) | Windows 平台支援：PE 格式、SEH、Win32 API 呼叫 | 選讀（平台向） |
 | [10-quick-ref.md](10-quick-ref.md) | 快速參考：暫存器、檔案對照、編譯流程 | 速查參考 |
 | [11-forth-compilation.md](11-forth-compilation.md) | Forth 編譯模式深入：STATE, :/;, IMMEDIATE, POSTPONE, COMPILE,, DOES> | 先修 / 參考附錄 |
+| [12-debugging.md](12-debugging.md) | 除錯與故障排查：建構、執行期、compiler、optimizer、FFI、image 問題定位 | 維護 / 排錯 |
+| [13-verification.md](13-verification.md) | 驗證、效能量測與安全檢查：分層測試、optimizer 等價性、FFI safety | 維護 / 驗證 |
+| [14-walkthrough.md](14-walkthrough.md) | 端到端走讀：從一個 Forth 字到 parser、compiler、optimizer、image save 與 runtime startup | 實作串接 |
+| [15-standalone-executable.md](15-standalone-executable.md) | 獨立執行檔生成：`SAVE`、`SAVE-WITH-RESERVE`、ELF/PE、entry point 與 runtime startup | 應用封裝 |
 
 ## 8. 核心術語速查
 
