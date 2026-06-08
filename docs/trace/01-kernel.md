@@ -50,8 +50,8 @@ Forth 是一種堆疊導向（stack-oriented）的程式語言。在傳統 Forth
 高位址 ─────────────────────────┐
                                │
           TOS-3  ◄── [EBP+8]  │
-          TOS-2  ◄── [EBP+4]  │  ← EBP 指向此處
-          TOS-1  ◄── [EBP]    │
+          TOS-2  ◄── [EBP+4]  │
+          TOS-1  ◄── [EBP]    │  ← EBP 指向此處（次堆疊項）
                                │
          ┌────────────────────┐│
   EAX ── │  TOS   (堆疊頂端)  ││  ← TOS 永遠快取在 EAX
@@ -101,38 +101,42 @@ RET
 
 ### 2.1 Forth 定義字的執行模型
 
-在 SP-Forth 中，每個 Forth 定義（word）在記憶體中的結構如下圖所示。**CFA 不是直接儲存執行碼位址，而是一段 `CALL rel32` 指令；其引用的目標位址（rel32）才是 PFA 的起始**：
+在 SP-Forth 中，每個 Forth 定義（word）在記憶體中的結構如下圖所示。要特別區分兩個位置：
+
+1. **xt cell**：位於 NFA 前 5 bytes，由 `NAME>` 讀取，內容是執行 token（通常指向後方的 5-byte `CALL rel32` 指令）。
+2. **執行碼欄位**：位於 LFA 之後，是一段 `CALL rel32`。此 `CALL` 的目標是 `_CREATE-CODE`、`_CONSTANT-CODE`、`_USER-CODE` 等 runtime code；而 `CALL` 之後的位置才是 PFA 起始，runtime code 透過 `POP` 取回這個返回位址作為 PFA。
 
 ```
-         ←── 低位址                                              高位址 ──→
-┌────────┬──────────────┬───────┬────────────┬───────────────────────────┐
-│ flags  │ 名稱 (可變長度) │ LFA(4) │ CALL rel32 │         PFA              │
-│ (1 B)  │              │        │   (5 B)    │   （定義類型決定的資料）    │
-└────────┴──────────────┴───────┴────────────┴───────────────────────────┘
- ↑                                              ↑
-NFA（名稱欄位位址）                             此處 + 5 bytes = PFA 起始
+         ←── 低位址                                                           高位址 ──→
+┌─────────┬────────┬────────────────┬───────┬────────────┬───────────────────────────┐
+│ xt cell │ flags  │ 長度/NFA + 名稱  │ LFA(4) │ CALL rel32 │         PFA              │
+│  (4 B)  │ (1 B)  │   (可變長度)     │        │   (5 B)    │   （定義類型決定的資料）    │
+└─────────┴────────┴────────────────┴───────┴────────────┴───────────────────────────┘
+                    ↑                          ↑           ↑
+                    NFA（長度位元組）            xt 指向此處   CALL 後即 PFA 起始
 ```
 
 **各欄位說明**：
 
 | 欄位 | 大小 | 說明 |
 |------|------|------|
-| `flags` | 1 byte | 旗標位元組（IMMEDIATE、SMUDGE、VOC 等） |
-| 名稱 | 可變 | 長度位元組（+7 隱藏位元）＋名稱字元 |
+| `xt cell` | 4 bytes | 位於 `NFA - 5`，`NAME>` 讀取此 cell 得到 xt；通常指向後方 `CALL rel32` 指令 |
+| `flags` | 1 byte | 位於 `NFA - 1` 的旗標位元組（IMMEDIATE、SMUDGE、VOC 等） |
+| 名稱 | 可變 | NFA 指向長度位元組，後面接名稱字元 |
 | `LFA` | 4 bytes | 鏈結欄位，指向前一個字的 NFA（構成詞彙表搜尋鏈） |
-| `CFA` | 5 bytes | 一條 `CALL rel32` 指令；`rel32` 的值＝ PFA 的絕對位址 |
+| 執行碼欄位 | 5 bytes | 一條 `CALL rel32` 指令；`rel32` 的目標是對應 runtime code，`CALL` 後的位置是 PFA |
 | `PFA` | 可變 | 參數欄位；儲存常數值、變數值、執行向量等，取決於定義類型 |
 
-**名稱欄位存取子**（均以 CFA 為參考原點往前回推）：
+**名稱欄位存取子**（均以 nt/NFA 為參考原點）：
 
 | 運算 | 定義 | 意義 |
 |------|------|------|
-| `NAME>C` | `EAX = NFA - 5` | 取 CFA 位址 |
+| `NAME>C` | `EAX = NFA - 5` | 取 xt cell 位址 |
 | `NAME>F` | `EAX = NFA - 1` | 取 flags 位址 |
 | `NAME>L` | `EAX = NFA + len + 1` | 取 LFA 位址 |
-| `NAME>` | `EAX = [NFA - 5]` | 取 **xt**（即 CFA 中的指標值，亦即 PFA） |
+| `NAME>` | `EAX = [NFA - 5]` | 取 **xt**（通常指向後方的 `CALL rel32` 指令） |
 
-**執行流程**：當 Forth 引擎執行一個 word 時，`CALL CFA` 會執行 `CALL [CFA]` —— 但事實上這條 `CALL` 指令是內嵌在字典中的（由 `SHEADER1` 的 `HERE 0 ,` 預留空間、`HERE SWAP !` 回填位址），它並不直接儲存目標位址，而是作為一個「橋樑」，讓 `NAME>` (`MOV EAX, -5[EAX]`) 能以一條指令取得 xt。
+**執行流程**：`SHEADER1` 先在 NFA 前預留一個 xt cell；後續定義字（例如 `CREATE`）會把「後方 `CALL rel32` 指令的位址」寫入此 cell。當 Forth 引擎執行 xt 時，CPU 執行該 `CALL rel32`，跳到 `_CREATE-CODE` 等 runtime code；同時 `CALL` 會把「下一個位址」（也就是 PFA 起點）推入回返堆疊。這就是為什麼 `_CREATE-CODE` / `_CONSTANT-CODE` 一開始能用 `POP EAX` 取得 PFA。
 
 不同定義類型在 PFA 中儲存不同資料：
 - `CONSTANT`：PFA = 常數值（4 bytes）
@@ -342,7 +346,7 @@ END-CODE
 - `MOV [EBP], EAX`：1 微操作，1 時脈週期，1 次記憶體寫入
 - `RET`：1 微操作
 
-**總計**：3 條指令，2 次記憶體存取（1 寫入 + 可能的快取命中）
+**總計**：3 條指令；若只看資料堆疊，只有 1 次記憶體寫入。`RET` 仍會讀取回返堆疊上的返回位址，但那屬於控制流成本，和資料堆疊存取分開計算。
 
 **與傳統堆疊模型比較**：
 ```
@@ -393,10 +397,10 @@ END-CODE
 
 ```asm
 CODE ROT ( x1 x2 x3 -- x2 x3 x1 ) \ 94
-      MOV  EDX, [EBP]     ; EDX = x1
+      MOV  EDX, [EBP]     ; EDX = x2（次項）
       MOV  [EBP], EAX     ; [EBP] = x3（新次項 = 舊 TOS）
-      MOV  EAX, 4 [EBP]   ; EAX = x2（新 TOS = 原第三項）
-      MOV  4 [EBP], EDX   ; [EBP+4] = x1（新第三項 = 原第一項）
+      MOV  EAX, 4 [EBP]   ; EAX = x1（新 TOS = 原第三項）
+      MOV  4 [EBP], EDX   ; [EBP+4] = x2（新第三項 = 原第二項）
       RET
 END-CODE
 ```
@@ -533,8 +537,8 @@ END-CODE
 ```asm
 CODE +! ( n|u a-addr -- ) \ 94
       MOV EDX, [EBP]   ; EDX = n
-      ADD [EAX], EDX   ; *a-addr += n（x86 LOCK 隱含，但單處理器無影響）
-      MOV EAX, 4 [EBP] ; 新 TOS
+      ADD [EAX], EDX   ; *a-addr += n（結果寫回記憶體，不寫入 EAX）
+      MOV EAX, 4 [EBP] ; EAX = 原堆疊第三項，成為新 TOS
       LEA EBP, 8 [EBP] ; 彈出兩項
       RET
 END-CODE
