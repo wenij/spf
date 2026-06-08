@@ -39,6 +39,19 @@
 
 如果你只熟悉 C 編譯器輸出的組語，最容易卡住的點是：**SP-Forth 裡的 `EBP` 不是 C 式 frame pointer。**
 
+#### 2.1a 一句話操作模型
+
+讀任何 `CODE` 定義前，先把暫存器翻成這張心智圖：
+
+```text
+EAX   = 資料堆疊頂端（TOS）
+[EBP] = 資料堆疊次項（second item）
+ESP   = 回返堆疊 / x86 call stack
+EDI   = USER / TLS 基底
+```
+
+所以看到一條指令時，先問：「它是在改 TOS、改次項、改回返堆疊，還是在切換 USER/TLS？」
+
 ---
 
 ### 2.2 指令先看「語意」，再看語法
@@ -93,6 +106,20 @@ SP-Forth assembler 在 source 裡常長這樣：
 | `-9 [EBX]` | `[ebx-9]` |
 | `[EDI] [EBX]` | `[edi+ebx]` |
 | `[EAX*4]` | `[eax*4]` |
+
+#### 2.3a 定址語法的組合規則
+
+SP-Forth assembler 的定址語法可以從小到大組合：
+
+| 想表達 | SP-Forth 寫法 | Intel 想法 |
+|--------|---------------|------------|
+| base | `[EBP]` | `[ebp]` |
+| base + disp | `8 [EBP]` | `[ebp+8]` |
+| index * scale | `[EAX*4]` | `[eax*4]` |
+| base + index | `[EDI] [EBX]` | `[edi+ebx]` |
+| base + index + disp | `12 [EBP] [ECX]` | `[ebp+ecx+12]` |
+
+實務上最常見的是 `[EBP]`、`4 [EBP]`、`[EAX*4]`。讀到複雜形式時，把它拆成「固定偏移 + base + index*scale」即可。
 
 ---
 
@@ -340,6 +367,18 @@ LEA EBX, -9 [EBX]   \ 回退到嵌入資料的位置
 
 它不是在「取某個 local variable 的位址」，也不是在「讀取 `[EBP-4]` 的內容」。
 
+#### 4.1.2a 打錯指令會發生什麼？
+
+假設 `EBP = 0x1000`，而記憶體 `[0x0FFC] = 0xABCD`：
+
+| 指令 | 執行後 `EBP` | 是否讀記憶體 | 結果 |
+|------|--------------|--------------|------|
+| `LEA EBP, -4 [EBP]` | `0x0FFC` | 否 | 正確：只是把 data stack pointer 往下移一格 |
+| `MOV EBP, -4 [EBP]` | `0xABCD` | 是 | 錯誤：把 `[EBP-4]` 的內容當成新的指標 |
+| `SUB EBP, # 4` | `0x0FFC` | 否 | 值對，但會改 flags |
+
+所以看到 `LEA EBP, ±4 [EBP]` 時，不要翻成「取位址」，而要翻成「調整 SP-Forth data stack pointer」。
+
 #### 4.1.3 和 ARM / AArch64 怎麼對照？
 
 SP-Forth 這套原始碼是 IA-32，但拿 ARM / AArch64 對照很有助於理解設計取向。
@@ -431,6 +470,17 @@ RET
 
 也就是說，它不是靠 `JE` / `JNE` 跳轉，而是直接把旗標「壓成」Forth 需要的真值格式。
 
+#### 4.2a `=` 的逐步真值表
+
+| 步驟 | 指令 | 若 x1 = x2 | 若 x1 ≠ x2 | 重點 |
+|------|------|------------|------------|------|
+| 1 | `XOR EAX, [EBP]` | `EAX = 0` | `EAX ≠ 0` | 相等才會變 0 |
+| 2 | `SUB EAX, # 1` | `EAX = -1`, `CF=1` | 通常 `CF=0` | 借位旗標記錄原值是否為 0 |
+| 3 | `SBB EAX, EAX` | `EAX = -1` | `EAX = 0` | 把 CF 轉成 Forth truth value |
+| 4 | `LEA EBP, 4 [EBP]` | pop 次項 | pop 次項 | 清理被比較的第二個參數 |
+
+Forth 的 true 是 `-1`（所有位元為 1），所以 `SBB EAX, EAX` 正好能把 CPU 的 CF 轉成 Forth 布林值。
+
 ---
 
 ### 4.3 `CALL` / `POP` 取嵌入資料
@@ -455,6 +505,23 @@ END-CODE
 
 這種寫法在一般組語世界也常見，可視為一種 **position-dependent embedded data trick**。  
 在 SP-Forth 裡，它很適合拿來實作 `TO VALUE` 這種需要直接回寫內嵌欄位的語意。
+
+#### 4.3a `CALL` 後面為什麼可以接資料？
+
+x86 執行 `CALL target` 時，會把「CALL 後面那個位址」推入 `ESP` 指向的回返堆疊：
+
+```text
+執行 CALL 前：                  進入 _TOVALUE-CODE 後：
+
+程式碼：                        ESP → return address
+CALL _TOVALUE-CODE                    │
+<embedded value cell>  ◄──────────────┘
+下一條指令
+```
+
+因此 `_TOVALUE-CODE` 一開始的 `POP EBX` 不是取一般資料堆疊，而是取出 x86 return address。這個 return address 剛好指向嵌入資料附近，所以再用 `LEA EBX, -9 [EBX]` 回推到要改寫的 cell。
+
+讀到 `POP` 但前面沒有明顯 `PUSH` 時，要先懷疑：這是不是在取 `CALL` 推入的 return address？
 
 ---
 
@@ -523,6 +590,24 @@ END-CODE
 也就是說，`A;` 不是 CPU 指令，而是 **assembler / metaprogramming 的切換點**。  
 它很適合拿來做「一邊寫 machine code，一邊修補剛輸出的 bytes」這種工作。
 
+#### 4.5a `A;` 的實際用途：修補剛輸出的位元組
+
+在 `_WNDPROC-CODE` 裡：
+
+```forth
+SUB  ESP, # 3968
+A;   HERE 4 - ' ST-RES 9 + EXECUTE
+```
+
+可以這樣讀：
+
+1. `SUB ESP, # 3968` 先輸出一條含有立即數的指令。
+2. `A;` 讓 assembler 完成這條指令的編碼。
+3. `HERE 4 -` 回到剛輸出的 4-byte immediate 欄位。
+4. `' ST-RES 9 + EXECUTE` 用 Forth 計算/修補這個欄位。
+
+所以 `A;` 不是「換行」或「註解」，而是讓你在兩條機器碼指令之間暫時回到 Forth 世界，做位址計算、patch、或其他組裝期工作。
+
 ---
 
 ## 5. SP-Forth 內建組語怎麼寫？
@@ -539,6 +624,15 @@ END-CODE
 ```
 
 這會建立一個 Forth 字詞，其執行碼欄位就是你在中間輸出的 machine code。
+
+更精確地說，`CODE WORD-NAME ... END-CODE` 會經過這些步驟：
+
+1. 建立標準 Forth header，名稱是 `WORD-NAME`。
+2. 進入 assembler vocabulary / assembler state。
+3. 中間每條 assembler 指令直接輸出 machine code 到字典。
+4. `END-CODE` 完成最後一條指令、檢查未解決的 forward reference、對齊並揭露新字。
+
+所以 `CODE` 不是單純的「組語區塊標記」；它是會建立一個可被 Forth 呼叫的 native word。
 
 最小例子：
 
@@ -589,6 +683,19 @@ MOV DWORD [EAX], # 0    \ 寫 4 bytes 的 0
 | `WORD` | 16-bit | `W@` / `W!`、x86 16-bit 欄位 |
 | `DWORD` | 32-bit | cell、位址、一般 IA-32 整數 |
 
+#### 5.2a1 為什麼需要大小修飾詞？
+
+裸記憶體操作數有時太模糊：
+
+```forth
+MOV [EAX], # 0       \ 不清楚要寫 1、2 還是 4 bytes
+MOV BYTE [EAX], # 0  \ 寫 1 byte
+MOV WORD [EAX], # 0  \ 寫 2 bytes
+MOV DWORD [EAX], # 0 \ 寫 4 bytes
+```
+
+只要看到「目的地或來源是裸記憶體位址」，就先想：assembler 是否能推斷大小？如果不能，就加 `BYTE` / `WORD` / `DWORD`。
+
 ### 5.2b `MOVZX` / `MOVSX`：讀小型資料時的擴展
 
 讀取 byte/word 到 32-bit 暫存器時，不能只看低位元。SP-Forth 常用：
@@ -616,6 +723,20 @@ JL SHORT @@1
 
 這能產生較短的跳躍指令；若距離太遠，就不能使用 `SHORT`。
 
+完整例子：
+
+```forth
+CODE ?DUP ( x -- 0 | x x )
+     TEST EAX, EAX
+     JZ SHORT @@1
+     LEA EBP, -4 [EBP]
+     MOV [EBP], EAX
+@@1: RET
+END-CODE
+```
+
+這裡 `JZ SHORT @@1` 是 forward reference；assembler 先記住要回填的位置，等看到 `@@1:` 再計算短跳距離。
+
 ### 5.2d `REPZ` / `REPNZ` 字串指令前綴
 
 SP-Forth 的字串與記憶體搬移原語會看到 x86 string instruction：
@@ -635,6 +756,18 @@ REPZ SCAS BYTE      \ 掃描 byte，ZF 條件成立時持續
 
 這些指令通常會同時使用 `ESI`、`EDI`、`ECX`，所以讀到它們時要先找這三個暫存器如何被設定。
 
+等價的手寫迴圈概念：
+
+```forth
+MOV ECX, # 100     \ 重複 100 次
+MOV ESI, source    \ 來源
+MOV EDI, dest      \ 目的
+CLD                \ 確保 ESI/EDI 往高位址前進
+REP MOVS DWORD     \ 搬 100 個 dword
+```
+
+`REP` 不會自己知道要搬多少；`ECX` 才是計數器。方向則由 DF flag 決定，所以常見程式會先 `CLD`。
+
 ### 5.2e `FS:` segment override
 
 少數程式碼會出現：
@@ -644,6 +777,14 @@ MOV EAX, FS: [EAX]
 ```
 
 `FS:` 是 x86 segment override。它不是一般記憶體定址，而是透過特定 segment base 存取資料；在作業系統或 TLS 相關程式碼中很常見。SP-Forth 原始碼中可在 `FS@` / `FS!` 看到 `FS: [EAX]` 形式；讀到這類寫法時，通常要聯想到 thread-local storage 或平台相關執行環境。
+
+在 SP-Forth 裡可先用這個策略讀：
+
+| 看到 | 先想到 |
+|------|--------|
+| `MOV EAX, FS: [EAX]` | 讀取 OS/thread-local 區域中的資料 |
+| `MOV FS: [EAX], EBX` | 寫入 OS/thread-local 區域 |
+| `TlsIndex!` / `TlsIndex@` | SP-Forth 自己用 `EDI` 保存 USER/TLS base，和 `FS:` 是不同層級的機制 |
 
 ---
 
@@ -673,6 +814,13 @@ RET
 
 - `RET`：你正在寫 assembler primitive
 - `RET,`：你正在寫「會產生 assembler bytes 的 Forth 字」
+
+對照表：
+
+| 寫法 | 出現位置 | 發生時間 | 意義 |
+|------|----------|----------|------|
+| `RET` | `CODE ... END-CODE` | 該 word 執行時 | CPU 返回上一層呼叫者 |
+| `RET,` | `: ... ;` 編譯器輔助字 | 編譯期間 | 把 `0xC3` 寫進 target image |
 
 ---
 
@@ -731,6 +879,16 @@ DP @ TO LAST-HERE
 | `LAST-HERE` | 記錄最近機器碼邊界，供後續最佳化/回填使用 |
 
 因此 `TC-CALL,` 裡的 `0E8 C,` 不是「立刻 CALL」，而是把 CALL opcode 寫進 target image；`DP @ CELL+ - ,` 則寫入 rel32 displacement。
+
+逐步追蹤一條 `CALL` 的輸出：
+
+| 步驟 | 程式碼 | 作用 |
+|------|--------|------|
+| 1 | `?SET` | 檢查 optimizer 狀態 |
+| 2 | `SetOP` | 標記新 machine instruction 起點 |
+| 3 | `0E8 C,` | 寫出 `CALL rel32` opcode |
+| 4 | `DP @ CELL+ - ,` | 計算並寫出 4-byte relative displacement |
+| 5 | `DP @ TO LAST-HERE` | 記錄這條指令結束位址 |
 
 ---
 
