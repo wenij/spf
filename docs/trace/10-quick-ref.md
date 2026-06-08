@@ -439,7 +439,7 @@ REQUIRE ANSI lib/include/ansi.f
 |------|------|-------------------|------------|
 | CORE | 內建核心 | `src/spf_forthproc.f`, `src/spf_defkern.f`, compiler 基礎檔 | [01-kernel.md](01-kernel.md), [02-compiler.md](02-compiler.md) |
 | CORE EXT | 部分內建，部分由 `ansi.f` 補齊 | `lib/include/core-ext.f`，如 `MARKER`, `SAVE-INPUT`, `RESTORE-INPUT`, `U.R`, `UNUSED`, `BUFFER:` | [02-compiler.md](02-compiler.md), [05-io-error-init.md](05-io-error-init.md) |
-| SEARCH | 內建搜尋順序 / wordlist 支援 | `src/compiler/spf_wordlist.f`, `src/compiler/spf_find.f` | [02-compiler.md §6-7](02-compiler.md#6-搜尋引擎spf_findf-spf_find_cdrf-深入解析) |
+| SEARCH | 內建搜尋順序 / wordlist 支援 | `src/compiler/spf_wordlist.f`, `src/compiler/spf_find.f` | [02-compiler.md §6](02-compiler.md#6-搜尋引擎spf_findf-spf_find_cdrf-深入解析)、[§7](02-compiler.md#7-詞彙表管理spf_wordlistf-深入解析) |
 | STRING | 由核心與 include 檔補齊 | `CMOVE`, `CMOVE>` 內建；`lib/include/string.f` 補 `/STRING`, `BLANK` 等 | [01-kernel.md](01-kernel.md), [02-compiler.md](02-compiler.md) |
 | DOUBLE | include 檔提供 | `lib/include/double.f` | [13-verification.md §2](13-verification.md#2-primitive-驗證) |
 | FLOATING | 浮點核心與 include 檔 | `src/spf_floatkern.f`, `lib/include/float*.f` | [01-kernel.md §4](01-kernel.md#4-浮點運算核心spf_floatkernf-深入解析) |
