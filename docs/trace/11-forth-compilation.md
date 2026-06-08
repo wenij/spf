@@ -133,6 +133,7 @@ DOUBLE:
 : :
   HEADER      \ 建立字典標頭
   ]           \ STATE ON → 進入編譯模式
+  HIDE        \ 暫時隱藏，避免半成品字在自身定義中可被搜尋
 ; IMMEDIATE
 ```
 
