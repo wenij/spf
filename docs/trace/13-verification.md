@@ -158,7 +158,7 @@ optimizer 規則不能只保留結果值。每條 rewrite 前後都要確認：
 | magic | `7F 45 4C 46` | `MZ` + `PE\0\0` |
 | machine | IA-32 | I386 |
 | entry point | 指向初始化入口 | 指向 PE stub / runtime init |
-| section / segment | `.text`, `.data`, relocation 合理 | section table、import table 合理 |
+| section / segment | `.forth`、`.space`、`.rel.forth`、`.dltable`、`.dlstrings` 存在且大小合理；`.space` 是 SHT_NOBITS（BSS-like），不佔檔案大小 | section table、import table 合理 |
 | dynamic symbols | libc / libdl 符號完整 | Import Directory / IAT 完整 |
 
 ### 5.2 位址空間檢查
