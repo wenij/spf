@@ -91,16 +91,17 @@ CREATE INPUT_RECORD ( /INPUT_RECORD) 20 2 * CHARS ALLOT
 
 `INPUT_RECORD` 佔 40 位元組（`20 * 2 CHARS`），足夠容納 Windows 的 `INPUT_RECORD` 結構（實際大小為 20 位元組，但以 2 倍空間分配以策安全）。
 
-結構偏移（根據第 23-42 行的程式碼推斷）：
+結構偏移（根據第 22-42 行的程式碼實際存取推斷）：
 
 | 偏移（位元組） | 欄位 | 說明 |
 |:---|:---|:---|
 | 0 | EventType | 事件類型（KEY_EVENT=1） |
-| 4 | (padding) | |
-| 6 | wVirtualScanCode | 掃描碼（第 12 行：`12 +`） |
-| 14 | AsciiChar | Unicode 字元（第 40 行：`14 +`） |
+| 4 | bKeyDown | 按下/釋放旗標（第 42 行：`04 +`，以 `C@` 讀取） |
+| 12 | wVirtualScanCode | 掃描碼（第 41 行：`12 +`，左移 16 位） |
+| 14 | AsciiChar | 字元碼（第 40 行：`14 +`，低 8 位由 `EKEY>CHAR` 取出） |
 | 16 | dwControlKeyState | 控制鍵狀態（第 23 行：`16 +`） |
-| 4 | bKeyDown | 按下/釋放旗標（第 42 行：`04 +`） |
+
+注意：這張表描述的是 SP-Forth 程式碼實際讀取的 offset，而不是完整 Win32 `INPUT_RECORD` / `KEY_EVENT_RECORD` C 結構宣告。
 
 **EKEY**（第 29-43 行）— 讀取擴充鍵事件：
 
@@ -109,7 +110,7 @@ CREATE INPUT_RECORD ( /INPUT_RECORD) 20 2 * CHARS ALLOT
   0 >R RP@ 2 INPUT_RECORD H-STDIN     \ 讀取 2 筆輸入記錄
   ReadConsoleInputA DROP RDROP 
   INPUT_RECORD W@ KEY_EVENT <> IF 0 EXIT THEN    \ 非按鍵事件忽略
-  [ INPUT_RECORD 14 + ] LITERAL W@     \ AsciiChar（Unicode）
+  [ INPUT_RECORD 14 + ] LITERAL W@     \ AsciiChar / 字元碼
   [ INPUT_RECORD 12 + ] LITERAL W@ 16 LSHIFT OR \ 掃描碼 << 16
   [ INPUT_RECORD 04 + ] LITERAL C@  24 LSHIFT OR \ bKeyDown << 24
 ;
@@ -164,7 +165,7 @@ VARIABLE PENDING-CHAR   \ 暫存已讀取但未取走的字元
 ' KEY1 ' KEY TC-VECT!                             \ 設定 KEY 向量
 ```
 
-`PENDING-CHAR` 是鍵盤「先讀」（look-ahead）緩衝：`KEY?` 讀取 EKEY 後發現可列印字元時暫存於此，等待後續 `KEY` 取走。初始值 -1（因為 0 可能是合法字元 NUL）。
+`PENDING-CHAR` 是鍵盤「先讀」（look-ahead）緩衝：`KEY?` 讀取 EKEY 後發現可列印字元時暫存於此，等待後續 `KEY` 取走。原始碼只宣告 `VARIABLE PENDING-CHAR`，沒有顯式初始化為 -1；因此初始值依 Forth 變數初始化規則為 0。讀出暫存字元後，`KEY1` 會寫入 -1 作為「已取走」標記。
 
 ### 1.4 日誌系統
 
