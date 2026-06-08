@@ -266,10 +266,78 @@ lea ebp, [ebp+4]    ; data stack 彈一格
 ret
 ```
 
+**逐步走查**：假設進入 `+` 時 `EAX = n2`（TOS），`EBP = 0x1000`，`[0x1000] = n1`（次項）：
+
+| 步驟 | 指令 | 結果 | 對 SP-Forth 而言 |
+|------|------|------|-------------------|
+| 1 | `ADD EAX, [EBP]` | `EAX = n1 + n2` | TOS ← TOS + 次項 |
+| 2 | `LEA EBP, 4 [EBP]` | `EBP = 0x1004` | data stack 彈一格（被加進去的次項已消耗） |
+| 3 | `RET` | 控制權回 caller | — |
+
+結束狀態：`EAX = n1+n2`、`EBP = 0x1004`。Stack effect：`( n1 n2 -- n3 )`。
+
 SP-Forth 的關鍵不是 `ADD` 本身，而是：
 
 - `EAX` 已經是 TOS，不必先 `MOV EAX, ...`
 - `LEA EBP, 4 [EBP]` 只是在調整 stack pointer，不是做一般 pointer arithmetic 練習
+- 整個 `+` **只用了 2 條指令**，連 `MOV` 都省了
+
+#### 3.3.1 為什麼順序是 `ADD` 在 `LEA` 之前？
+
+直覺寫法可能會想先 `pop` 再加：
+
+```asm
+MOV ECX, [EBP]      ; 備份次項
+LEA EBP, 4 [EBP]    ; pop
+ADD EAX, ECX        ; 相加
+```
+
+但 SP-Forth 知道**那個被 pop 掉的次項在 `ADD` 之後就沒人要了**。直接把 `ADD EAX, [EBP]` 接在 `LEA` 之前，省一次暫存器搬移，也少讀一次 `[EBP]`。這是 **branch-free peephole** 的精神：把「不可避免的副作用」壓到最少指令裡。
+
+#### 3.3.2 flags 與後續指令
+
+`ADD` 會同時改 `OF/SF/ZF/AF/PF/CF`。對 SP-Forth 來說：
+
+- 如果 `+` 之後馬上接的是另一個 Forth word（compiler emit 的下一段組語），那 flags 被前一段覆寫是**正常**的，沒有「flags 被偷走」的問題。
+- 如果 `+` 之後在同一段 `CODE` 內緊接著 `IF` / `?BR-OPT` 之類的條件跳，那 `+` 的 flags 是設計的一部分——你可以**故意**靠它省一條 `CMP`。
+
+例如：
+
+```asm
+ADD EAX, [EBP]
+LEA EBP, 4 [EBP]
+JNZ SHORT @@1        ; 靠 ADD 的 ZF
+@@1: RET
+```
+
+這個慣用法在 `OPT-RULES` 與 `?BR-OPT` 裡到處可見。
+
+#### 3.3.3 一個可以自己跑的測試
+
+```forth
+CODE + ( n1 n2 -- n3 )
+     ADD EAX, [EBP]
+     LEA EBP, 4 [EBP]
+     RET
+END-CODE
+
+: TEST-PLUS ( -- )
+  100 23 + .   \ 應該印 123
+  CR
+;
+```
+
+如果印出 100 或 23，表示 `+` 的 TOS 邏輯有 bug（最常見：`LEA` 的位移用錯，pop 沒對齊）。
+
+#### 3.3.4 與 C / 一般組語的差異總結
+
+| 寫法 | 指令數 | 是否動 flags | 是否多一次暫存器搬移 |
+|------|--------|--------------|----------------------|
+| `MOV ECX,[ebp]; LEA ebp,[ebp+4]; ADD eax,ecx` | 3 | 是 | 是 |
+| `ADD EAX, [EBP]; LEA EBP, 4 [EBP]` | 2 | 是 | 否 |
+| `LEA EAX, [EAX+EBP]; LEA EBP, 4 [EBP]` | 2 | 否 | 否（用 `LEA`） |
+
+第三種只有在「後面不能讓 flags 被改」時才用。SP-Forth 預設走第二種。
 
 ---
 
@@ -282,10 +350,20 @@ CODE CELLS
 END-CODE
 ```
 
+**逐步走查**：假設進入 `CELLS` 時 `EAX = 3`（cell 個數）：
+
+| 步驟 | 指令 | 結果 | 對 SP-Forth 而言 |
+|------|------|------|-------------------|
+| 1 | `LEA EAX, [EAX*4]` | `EAX = 12` | 將 cell 個數轉成 byte 個數（3 cells × 4 bytes/cell = 12 bytes） |
+| 2 | `RET` | — | 回 caller |
+
+結束狀態：`EAX = 12`。對應 Forth 語意是 `( n -- n*4 )`（用 byte 數表示同一段距離）。
+
 這裡是很適合初學者理解的 `LEA` 技巧：
 
 - `LEA` 不一定只是「取位址」
 - 它也常被拿來做 **不碰記憶體的整數運算**
+- 結果只寫到目的暫存器，**不改任何旗標**
 
 一般組語裡你可能寫：
 
@@ -303,6 +381,48 @@ lea eax, [eax*4]
 
 - 語意直接表達「cell 大小 = 4 bytes」
 - 不需要真的去讀某個記憶體位址
+- 不會改 flags（如果後面要接條件跳或 optimizer 介入，這點很重要）
+
+#### 3.4.1 為什麼用 `LEA` 而不用 `SHL`？
+
+對照表：
+
+| 寫法 | 指令長度 | 是否改 flags | 閱讀意圖 |
+|------|----------|--------------|----------|
+| `LEA EAX, [EAX*4]` | 3 bytes | 否 | 「乘以 cell size」 |
+| `SHL EAX, 2` | 2~3 bytes | 是 | 一般左移 2 位 |
+| `ADD EAX, EAX; ADD EAX, EAX` | 4 bytes | 是 | 兩次自我相加 |
+
+`LEA` 在這裡勝在：
+
+1. **不動 flags**：後面若要接 `IF` 或 flags 相關的機器碼，flags 仍是乾淨的。
+2. **語意更清楚**：「乘以 4」是地址計算，讀者一看就聯想到 cell size。
+3. **單一指令**取代多條 shift/add。
+
+#### 3.4.2 跨平台提醒
+
+這個 `[EAX*4]` 把 cell size 寫死成 4。如果把 SP-Forth 移植到 64-bit（cell = 8），這條 `LEA` 要改成 `LEA EAX, [EAX*8]`，或者用更通用的「先乘 CELL」版本。SP-Forth 在 IA-32 上沒有用 `CELL` 常數展開成 `*4`，而是直接 hardcode——這是 IA-32-only 假設的痕跡之一。
+
+#### 3.4.3 練習：自己推出 `2 CELLS` 的值
+
+```text
+2 CELLS  =>  EAX = 2*4 = 8
+3 CELLS  =>  EAX = 3*4 = 12
+0 CELLS  =>  EAX = 0
+```
+
+如果實際結果對不起來，幾乎可以肯定是 `CELL` 不是 4，或者 `[EAX*4]` 被打成 `[EAX*2]`。
+
+#### 3.4.4 與 `CHAR+` / `CHARS` 的對照
+
+| Forth word | 行為 | 對應指令（IA-32） |
+|------------|------|-------------------|
+| `CHARS`     | `n` 個 char 對應的 byte 數 | `EAX := EAX * 1`（SP-Forth 通常 **no-op**，因為 `1 * n = n`） |
+| `CELL+`     | 把 cell 個數加 1 | `ADD EAX, # 1` 或 `INC EAX` |
+| `CELLS`     | `n` 個 cell 對應的 byte 數 | `LEA EAX, [EAX*4]` |
+| `CHAR+`     | 把 byte 位址加 1 | `ADD EAX, # 1` 或 `INC EAX` |
+
+可以看到 `CELLS` 是少數真正需要「乘 cell size」的 word；其他多半是常數加法或 no-op。
 
 ---
 
@@ -904,11 +1024,49 @@ CODE DUP ( x -- x x )
 END-CODE
 ```
 
-你應該練習看到它就能翻譯成：
+**逐步走查**：假設進入 `DUP` 時 `EAX = 0xAB`，`EBP = 0x1000`：
+
+| 步驟 | 指令 | 結果 | 對 SP-Forth 而言 |
+|------|------|------|-------------------|
+| 1 | `LEA EBP, -4 [EBP]` | `EBP = 0x0FFC` | data stack 推入一格（位置 `0x0FFC` 現在「空著」） |
+| 2 | `MOV [EBP], EAX` | `[0x0FFC] = 0xAB` | 把舊 TOS 寫到剛騰出的位置 |
+| 3 | `RET` | 控制權回 caller | — |
+
+結束狀態：`EAX = 0xAB`、`EBP = 0x0FFC`、`[0x0FFC] = 0xAB`。也就是 stack 變成 `( 0xAB -- 0xAB 0xAB )`，跟 Forth 的 `( x -- x x )` 對得起來。
+
+**練習重點**：
 
 - push 一格
 - 把舊 TOS 寫回 memory
-- 保留 `EAX`
+- 保留 `EAX`（不重新載入）
+- 全部 **2 條指令** 就完成 `DUP`，這是 TOS-in-EAX 模型最大的回報
+
+#### 6.1.1 對照：若用 C frame pointer 思維會讀錯成什麼？
+
+| 讀法 | 結果 |
+|------|------|
+| 以為 `EBP` 是 C frame pointer | 會以為 `LEA EBP, -4 [EBP]` 是「準備 local variable」 |
+| 以為 `[EBP]` 是 return address | 會以為 `MOV [EBP], EAX` 在覆蓋返回位址而驚慌 |
+| 改用正確讀法 | 看到「data stack pointer 往下移一格，把 TOS 寫回去」 |
+
+**記住**：在 SP-Forth，`EBP` 跟 return address **毫無關係**。`RET` 之前一定要先把 Forth 回返堆疊處理好，CPU 才看得到正確的 return target。
+
+#### 6.1.2 一個可以自己跑的測試
+
+```forth
+CODE DUP ( x -- x x )
+     LEA EBP, -4 [EBP]
+     MOV [EBP], EAX
+     RET
+END-CODE
+
+: TEST-DUP ( -- )
+  42 DUP . .  \ 印 42 42
+  CR
+;
+```
+
+執行 `TEST-DUP` 應該印出 `42 42`。如果印出別的（例如 42 然後 0），表示 `DUP` 的 EBP / EAX 邏輯有 bug，幾乎可以確定不是你寫的使用者程式錯了。
 
 ---
 
@@ -922,11 +1080,44 @@ CODE + ( n1 n2 -- n3 )
 END-CODE
 ```
 
+**逐步走查**：假設進入 `+` 時 `EAX = n2`（TOS），`EBP = 0x1000`，`[0x1000] = n1`（次項）：
+
+| 步驟 | 指令 | 結果 | 對 SP-Forth 而言 |
+|------|------|------|-------------------|
+| 1 | `ADD EAX, [EBP]` | `EAX = n1 + n2` | TOS := 次項 + TOS，**不重複讀** TOS |
+| 2 | `LEA EBP, 4 [EBP]` | `EBP = 0x1004` | data stack 彈出一格（被加進去的次項已消耗） |
+| 3 | `RET` | 控制權回 caller | — |
+
+結束狀態：`EAX = n1+n2`、`EBP = 0x1004`。Stack effect：`( n1 n2 -- n3 )`。
+
 要練習的重點：
 
-- `EAX` 已是 TOS
-- `[EBP]` 是次項
-- `LEA EBP, 4 [EBP]` 代表 pop 一格
+- `EAX` 已是 TOS，不必先 `MOV EAX, ...`
+- `[EBP]` 是次項，**`ADD` 一次就夠**（不必先 pop 再 add）
+- `LEA EBP, 4 [EBP]` 代表 pop 一格，但**沒有刪除記憶體**——被 pop 的格子其實還在，只是 `EBP` 不再指它
+- 整個 `+` 只用 **2 條指令**，連 `MOV` 都省了
+
+#### 6.2.1 為什麼不用先 `POP` 再 `ADD`？
+
+C / 一般組語寫法可能是：
+
+```asm
+mov ecx, [ebp]      ; 先把次項備份到 ECX
+lea ebp, [ebp+4]    ; pop
+add eax, ecx        ; 真的相加
+```
+
+但 SP-Forth 知道 `EAX` 馬上就會被新值覆蓋，所以**那個「被 pop 掉的次項」在 `ADD` 完成後就沒人要了**。直接把 `ADD EAX, [EBP]` 接在 `LEA EBP, 4 [EBP]` 之前，少一次暫存器搬移，也少讀一次 `EBP`。
+
+#### 6.2.2 對照：符號/溢位/旗標
+
+- `ADD` 會改 OF/SF/ZF/AF/PF/CF。如果後續會 `IF ... THEN`，這些旗標是設計語意的一部分。
+- 若要在 `+` 之後**保留** flags（例如馬上接一段用 flags 的組合語言），就不行；這時需要先把 flags 存在某個地方，或者改用 `LEA` 改寫。
+- 對 Forth 來說，`+` 之後通常接的是另一個 Forth word（會再 emit 自己的組語），所以旗標被前一段覆寫是常態，不是問題。
+
+#### 6.2.3 邊界與進位
+
+`ADD EAX, [EBP]` 在 IA-32 是 32-bit 整數加法，不分有號無號。Forth 規格允許 `-` 與 `+` 在 cell 範圍內 wrap around（`ADDRESS-UNIT-BITS` 與 `MAX-N`/`MAX-U` 由實作決定），SP-Forth 的 `+` 不做額外檢查。
 
 ---
 
@@ -939,10 +1130,50 @@ CODE CELLS
 END-CODE
 ```
 
+**逐步走查**：假設進入 `CELLS` 時 `EAX = 3`（cell 個數）：
+
+| 步驟 | 指令 | 結果 | 對 SP-Forth 而言 |
+|------|------|------|-------------------|
+| 1 | `LEA EAX, [EAX*4]` | `EAX = 12` | 將 cell 個數轉成 byte 個數（3 cells × 4 bytes/cell = 12 bytes） |
+| 2 | `RET` | — | 回 caller |
+
+結束狀態：`EAX = 12`。對應 Forth 語意是 `( n -- n*4 )`（用 byte 數表示同一段距離）。
+
 這個例子很適合拿來理解：
 
 - `LEA` 常被當成 integer arithmetic
 - SP-Forth 的 cell 在 IA-32 上是 4 bytes
+- `[EAX*4]` 的 `4` 來自 cell 大小；如果換到 64-bit SP-Forth，這個常數會變 `8`
+
+#### 6.3.1 為什麼用 `LEA` 而不用 `SHL`？
+
+對照表：
+
+| 寫法 | 指令長度 | 是否改 flags | 閱讀意圖 |
+|------|----------|--------------|----------|
+| `LEA EAX, [EAX*4]` | 3 bytes | 否 | 「乘以 cell size」 |
+| `SHL EAX, 2` | 2~3 bytes | 是 | 一般左移 2 位 |
+| `ADD EAX, EAX; ADD EAX, EAX` | 4 bytes | 是 | 兩次自我相加 |
+
+`LEA` 在這裡勝在：
+
+1. **不動 flags**：後面若要接 `IF` / 旗標相關指令，flags 仍是乾淨的。
+2. **語意更清楚**：「乘以 4」是地址計算，讀者一看就聯想到 cell size。
+3. **單一指令**取代多條 shift/add。
+
+#### 6.3.2 跨平台提醒
+
+這個 `[EAX*4]` 把 cell size 寫死成 4。如果把 SP-Forth 移植到 64-bit（cell = 8），這條 `LEA` 要改成 `LEA EAX, [EAX*8]`，或者用更通用的「先乘 CELL」版本。SP-Forth 在 IA-32 上沒有用 `CELL` 常數展開成 `*4`，而是直接 hardcode——這是 IA-32-only 假設的痕跡之一。
+
+#### 6.3.3 練習：自己推出 `2 CELLS` 的值
+
+```text
+2 CELLS  =>  EAX = 2*4 = 8
+3 CELLS  =>  EAX = 3*4 = 12
+0 CELLS  =>  EAX = 0
+```
+
+如果實際結果對不起來，幾乎可以肯定是 `CELL` 不是 4，或者 `[EAX*4]` 被打成 `[EAX*2]`。
 
 ---
 
@@ -956,10 +1187,61 @@ LEA EBP, 4 [EBP]
 RET
 ```
 
-這裡練習的是：
+這是 `=` 的本體，會把 `( x1 x2 -- flag )`，其中 `flag` 是 `-1`（相等）或 `0`（不相等）。
+
+**逐步走查**：假設進入時 `EAX = x1`，`EBP = 0x1000`，`[0x1000] = x2`：
+
+| 步驟 | 指令 | 若 x1 = x2 | 若 x1 ≠ x2 | 重點 |
+|------|------|------------|------------|------|
+| 1 | `XOR EAX, [EBP]` | `EAX = 0` | `EAX = x1 XOR x2 ≠ 0` | 把兩個值的差轉成「是否為 0」 |
+| 2 | `SUB EAX, # 1` | `EAX = -1`（0xFFFFFFFF），`CF = 1`（借位） | `EAX` 視差值而變，`CF = 0` | 借位旗標記住「原本是否為 0」 |
+| 3 | `SBB EAX, EAX` | `EAX = -1`（CF 為 1，`EAX - EAX - 1`） | `EAX = 0`（CF 為 0，`EAX - EAX - 0`） | 把 CF 轉成 Forth 真值 |
+| 4 | `LEA EBP, 4 [EBP]` | `EBP += 4` | `EBP += 4` | pop 次項 |
+| 5 | `RET` | — | — | — |
+
+練習的重點：
 
 - CPU flags 也是資料流的一部分
-- `SBB reg, reg` 可以把 `CF` 壓成 `0` 或 `-1`
+- `SBB reg, reg` 是經典「把 CF 變成 0 / -1」技巧
+- **完全沒有跳轉**——這也是為什麼 SP-Forth 的 `=` 沒有 branch misprediction 成本
+
+#### 6.4.1 為什麼 Forth 用 `-1` 當 true？
+
+Forth 的布林慣例是「所有 bit 為 1」才是 true。這條慣例的歷史原因之一是「-1 的 bitwise NOT 是 0」與「對任何 cell 來說，NOT 0 就是 -1」這兩個事實剛好對得起來。
+
+`SBB EAX, EAX` 巧合地同時滿足：
+
+- 兩種情況結果都是 `0` 或 `-1`（不會有其他值）
+- 結果**所有 bit**都一致（全 0 或全 1），符合 Forth truth 慣例
+
+如果換成 `JNE label; MOV EAX, -1; label: MOV EAX, 0`，結果雖然一樣，但：
+
+1. 多了一條分支。
+2. branch predictor 失準時會痛。
+3. 多了一個 forward reference / label，後續 optimizer 還得多一個最佳化規則。
+
+#### 6.4.2 為什麼 `SUB 1` 用在 `XOR` 之後？
+
+`XOR EAX, EAX`（自己 XOR 自己）會把 flags 清成「結果為 0」。但**這裡的 XOR 是 `EAX` 與 `[EBP]`**，結果不一定是 0。`SUB EAX, # 1` 是把「`XOR` 結果是不是 0」轉成「借位旗標 CF」：
+
+- 若 XOR = 0，SUB 0-1 = -1，CF = 1（借位）
+- 若 XOR ≠ 0，SUB (XOR) - 1，CF = 0（除非 XOR 正好是 0，這個 case 上面處理過）
+
+CF 才是我們要的「相等旗標」。`SBB` 把 CF 翻成 Forth 布林。
+
+#### 6.4.3 對照：用 `CMP` + 條件賦值怎麼寫？
+
+```asm
+cmp eax, [ebp]
+mov eax, 0
+jne done
+mov eax, -1
+done:
+lea ebp, 4 [ebp]
+ret
+```
+
+功能一樣，但分支明確。SP-Forth 的寫法則把這四條壓成四條**線性**指令，沒有任何 branch，optimizer 也更好處理。
 
 ---
 
@@ -977,6 +1259,23 @@ XCHG EAX, [ESP]
 RET
 ```
 
+這是 Windows callback / Linux signal handler 風格的橋接器，把外部 C 函式的呼叫 frame 翻譯成 SP-Forth 可以執行的環境。
+
+**逐步走查**：
+
+| 步驟 | 指令 | 為什麼 |
+|------|------|--------|
+| 1 | `MOV EAX, ESP` | 把目前 x86 stack pointer 存到 `EAX`。稍後 Forth 退出時要還原。 |
+| 2 | `SUB ESP, # 3968` | 在 x86 stack 開 3968 bytes 的「工作區」，給 Forth 模擬使用。 |
+| 3 | `A;` | 強迫 assembler 完成 `SUB` 的 emit。 |
+| 4 | `HERE 4 - ' ST-RES 9 + EXECUTE` | 倒回到剛 emit 的 `3968` 欄位，呼叫 Forth 字 `ST-RES 9 +` 把它修成「回填位置」。 |
+| 5 | `PUSH EBP` | 把目前的 `EBP`（其實是 data stack pointer）保護到 x86 stack 頂端。 |
+| 6 | ... | 中段可能是建立新的 `EBP`、`EDI`（USER base）、初始化 local 變數的程式碼。 |
+| 7 | `CALL EBX` | 呼叫真正的 Forth 主體（由 callback 流程決定）。 |
+| 8 | ... | 收尾、把回返值整理到 `EAX`。 |
+| 9 | `XCHG EAX, [ESP]` | 把 `EAX`（Forth 回返值）和 `[ESP]`（保護中的舊 EBP）對調；下一步 `RET` 把 EBP pop 回 EBP。 |
+| 10 | `RET` | x86 跳回 callback 的 caller；`EAX` 是回返值。 |
+
 這個例子比前面難很多，因為它一次混了：
 
 - x86 stack / register 保存
@@ -989,6 +1288,40 @@ RET
 1. 先只看 `MOV/SUB/PUSH/CALL/POP/XCHG`
 2. 再看它怎麼把 C callback frame 轉成 Forth 可執行環境
 3. 最後才看 `A;` 那一行的 metaprogramming 意味
+
+#### 6.5.1 為什麼要 `A;`？
+
+`SUB ESP, # 3968` 這條指令要 emit 的 `3968` 是 4-byte immediate，assembler 必須先知道 Forth 字面常數的值才能 emit。等到 Forth 真的跑完 `:` 定義，那個 4-byte 欄位就已經躺在 dictionary 裡了。
+
+`A; HERE 4 - ' ST-RES 9 + EXECUTE` 則是：
+
+- `A;` 收尾前一條組語。
+- `HERE 4 -` 拿到剛 emit 出去的 `3968` 欄位位址。
+- `' ST-RES 9 +` 計算回填目標位址（`ST-RES` 是某個常駐 Forth word，它的位址加 9 指向某個固定偏移）。
+- `EXECUTE` 跑那個 Forth 字，**在編譯期**把欄位修好。
+
+#### 6.5.2 為什麼 callback 還要保護 `EBP`？
+
+在 callback 內部，SP-Forth 要建立自己的 data stack（在 Windows 上就是這 3968 bytes 的保留區）。`EBP` 會被改成指向這塊新區域的某個位置。callback 結束時必須把**外層**的 `EBP` 還原，否則外部 C 程式看到 `EBP` 突然指到奇怪的位址會 crash。
+
+`PUSH EBP` 在進入時保護、`XCHG EAX, [ESP]; RET` 在退出時一邊還原 EBP、一邊把 Forth 回返值交給 caller。
+
+#### 6.5.3 練習：把它壓成 pseudo-Forth
+
+```text
+callback_frame:
+  保留舊 ESP        \ MOV EAX, ESP
+  開 3968 bytes    \ SUB ESP, 3968
+  記住「還原位置」 \ A; ... ST-RES ...
+  保護舊 EBP       \ PUSH EBP
+  建立新 data stack \ 設定 EBP / EDI
+  跑 Forth 主體    \ CALL EBX
+  取回 Forth TOS   \ 從 stack 讀到 EAX
+  還原舊 EBP       \ XCHG EAX, [ESP]
+  返回 C caller    \ RET
+```
+
+這 9 個步驟就是 `_WNDPROC-CODE` 之類橋接器的本質。
 
 ---
 
@@ -1004,12 +1337,72 @@ RET
 ;
 ```
 
-這裡最容易誤解的地方是：這段不是 runtime primitive。  
-它是在**產生 target machine code**，所以：
+**逐步走查**：這個字在**編譯期**被呼叫，參數 `addr` 是要被呼叫的 Forth word 的 CFA（Code Field Address）：
 
-- `0E8 C,` 是寫出 opcode
-- `,` 是寫出 rel32
-- `LAST-HERE` 是讓後續最佳化器/回填邏輯知道目前 machine code 邊界
+| 步驟 | 程式碼 | 發生在什麼時候 | 作用 |
+|------|--------|----------------|------|
+| 1 | `?SET` | 編譯期 | 清掉過時的 OP / JP 緩衝區 |
+| 2 | `SetOP` | 編譯期 | 記錄「下一條機器碼的 DP 起點」 |
+| 3 | `0E8 C,` | 編譯期 | 把 `CALL rel32` 的 opcode `0xE8` 寫進 dictionary |
+| 4 | `DP @ CELL+ - ,` | 編譯期 | 計算 `addr` 相對「CALL opcode 之後 5 byte」的相對位移，emit 為 4-byte literal |
+| 5 | `DP @ TO LAST-HERE` | 編譯期 | 把這條 machine instruction 的結束位址記起來，給 optimizer 用 |
+
+#### 6.6.1 一個具體數字
+
+假設 `TC-CALL,` 被呼叫時：
+
+- `addr = 0x00403000`（某個 Forth word 的 CFA）
+- `DP` 在 `0x00401010`（剛 emit 完 `0xE8`）
+- 所以 rel32 的計算基準是 `0x00401011`（CALL opcode + 1）
+
+emit 出來的 4-byte displacement 就是：
+
+```text
+0x00403000 - 0x00401011 = 0x00001FEF
+```
+
+寫進 dictionary 後，target 執行到這條 CALL 時，CPU 算 `IP + rel32 = (0x00401011) + 0x00001FEF = 0x00403000`，正好跳到 `addr`。
+
+#### 6.6.2 為什麼 `DP @ CELL+ - ,` 不是 `DP @ - ,`？
+
+CALL 的 rel32 計算基準是 **「CALL opcode 結束的下一個 byte」**，不是「CALL 的起始位址」：
+
+```
+[ DP ]     0xE8     \ CALL opcode，1 byte
+[ DP+1 ]   rel32    \ 4 byte，這裡的位移是以 DP+5 為基準
+[ DP+5 ]   ← 下一條指令
+```
+
+所以是 `DP @ CELL+ - ,`（`CELL+` 把 DP 推進 1 cell / 4 bytes，然後用 `addr - DP_after_opcode` 當 rel32）。
+
+#### 6.6.3 為什麼要 `LAST-HERE`？
+
+`LAST-HERE` 是「上一條 machine instruction 的結束位址」。`OPT_CLOSE` / `RESOLVE_OPT` 之後的優化器會用這個值判斷哪些 OP / JP 插槽還在目前最佳化邊界內，避免誤刪。
+
+把 `DP @ TO LAST-HERE` 放在每條 emit 結尾，等於是告訴 optimizer：「這條 CALL 的邊界在這裡，後續的優化不要跨過它。」
+
+#### 6.6.4 對照：`C,` / `,` 在這裡不是「執行」
+
+| 寫法 | 跑在 | 會做什麼 |
+|------|------|----------|
+| `0E8 C,` | 編譯期 | 寫出 1 byte `0xE8` |
+| `,` | 編譯期 | 寫出 1 cell |
+| `EXECUTE` | 執行期 | 真的呼叫某個 Forth word |
+
+`C,` / `,` 是 byte emitter；`EXECUTE` 是控制流。讀到 `C,` / `,` 時，**它們不會在這一刻跳到任何地方**；它們只是在擴充 image。
+
+#### 6.6.5 練習：寫一個最簡單的 `TC-JMP,`
+
+```forth
+: TC-JMP, ( addr -- )
+  ?SET  SetOP
+  0xE9 C,           \ JMP rel32 opcode
+  DP @ CELL+ - ,
+  DP @ TO LAST-HERE
+;
+```
+
+跟 `TC-CALL,` 的差別只有 opcode（`0xE8` → `0xE9`）和「CALL 會 push return address / JMP 不會」。如果這段拼對了，你可以用 `TC-JMP,` 在 compile-time 產生一個長跳 JMP，並用 `RESOLVE_OPT` 在後續把 `0xE9` 縮成短跳 `0xEB`（見 [07-optimizer.md](07-optimizer.md) §6.2.5）。
 
 ---
 
