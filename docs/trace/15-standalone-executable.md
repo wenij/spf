@@ -51,8 +51,8 @@ S" console.exe" SAVE
 
 | 字 / 變數 | 用途 |
 |-----------|------|
-| `SAVE ( a u -- )` | 把目前系統映像儲存成 executable |
-| `<MAIN>` | console mode 的入口 VALUE |
+| `SAVE ( c-addr u -- )` | 把目前系統映像儲存成 executable（POSIX 與 Windows 各有實作） |
+| `<MAIN>` | console mode 的入口 VECT（vectored word） |
 | `MAINX` | GUI mode 的入口 VARIABLE |
 | `?CONSOLE` / `?GUI` | 選擇 PE subsystem / 啟動模式 |
 | `SPF-INIT?` | 控制是否處理 command line 與 `spf4.ini` |
