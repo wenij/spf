@@ -3,12 +3,14 @@
 > 定位：把前面各章的機制串成「壞掉時怎麼查」的操作手冊。
 >
 > 本章不重複完整實作細節，而是提供排查路徑：先判斷故障層級，再回到對應 trace 文件與原始碼。
+>
+> **本章以 SP-Forth 內建的 trace 機制為主**（`DUMP-TRACE`、`DUMP-TRACE-USING-REGS`、例外標頭與堆疊傾印），不預設依賴外部 debugger。在 Linux 上仍可搭配 `gdb`、在 Windows 上搭配 WinDbg 作為輔助；但因為 SP-Forth 使用特殊的 TOS-in-EAX 模型與自訂映像佈局，內建 trace 通常比通用 debugger 更快定位問題。
 
 ---
 
 ## 1. 先判斷故障發生在哪一層
 
-SP-Forth 的問題通常不要一開始就追到組語。先用症狀把問題切到正確層級：
+SP-Forth 的問題通常不需要一開始就追到組語。先用症狀把問題切到正確層級：
 
 | 症狀 | 優先懷疑層級 | 主要文件 |
 |------|--------------|----------|
@@ -78,7 +80,7 @@ SP-Forth IA-32 執行模型最重要的假設是：
 
 | 暫存器 | 語意 | 壞掉時常見症狀 |
 |--------|------|----------------|
-| `EAX` | TOS cache | 算術、比較、堆疊結果錯亂 |
+| `EAX` | TOS（堆疊頂端本體，非快取） | 算術、比較、堆疊結果錯亂 |
 | `EBP` | 資料堆疊指標，指向次堆疊項 | `DROP` / `DUP` 後崩潰或讀寫錯位 |
 | `EDI` | TLS / USER 區基底 | `USER` 變數、錯誤處理、signal recovery 異常 |
 
@@ -256,7 +258,7 @@ stdcall（WinAPI 常見）
 
 ```text
 1. 平台：POSIX / Windows / Cygwin，32-bit toolchain 版本
-2. 建構選項：spf4 / spf4e、OPT?、BUILD-OPTIMIZER、TARGET-POSIX/TARGET-WIN
+2. 建構選項：spf4 / spf4e、`OPT?`（執行期 VALUE）、`BUILD-OPTIMIZER` / `USE-OPTIMIZER`、`TARGET-POSIX`（注意：沒有 `TARGET-WIN`；Windows 是「`TARGET-POSIX` 為 FALSE」的分支，平台另由 Makefile 的 `PLATFORM` 變數決定）
 3. 最小重現 Forth 程式
 4. 失敗階段：build / include / compile / save / startup / runtime
 5. 最後一個成功載入的檔案
@@ -329,7 +331,7 @@ SP-Forth 的錯誤可能以 Forth `THROW`、POSIX signal、Windows SEH 或建構
 ```text
 signal / exception: SIGSEGV 或 access violation
 EIP = 0x........   ; 當時正在執行的指令位置
-EAX = 0x........   ; TOS cache
+EAX = 0x........   ; TOS（堆疊頂端）
 EBP = 0x........   ; Forth data stack pointer
 ESP = 0x........   ; return stack / x86 stack pointer
 EDI = 0x........   ; USER/TLS base
