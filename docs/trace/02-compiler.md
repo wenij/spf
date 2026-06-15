@@ -1159,7 +1159,7 @@ STATE = 0(直譯) │ 0 = 1 → false   │ 0 = -1 → false
 ### 10.3 EVALUATE 與 RECEIVE-WITH
 
 ```forth
-\ spf_translate.f:225-243
+\ spf_translate.f:235-243
 : EVALUATE ( i*x c-addr u -- j*x )
   ['] INTERPRET EVALUATE-WITH
 ;
@@ -1479,7 +1479,7 @@ SLITERAL 有三種行為：
 ### 13.3 S" 與 C"：字串建構
 
 ```forth
-\ spf_immed_lit.f:47-60
+\ S" 於 spf_immed_lit.f:47-60；C" 於 spf_immed_lit.f:62-78
 : S" ( "ccc<quote>" -- c-addr u )
   [CHAR] " PARSE [COMPILE] SLITERAL
 ; IMMEDIATE
@@ -1529,7 +1529,7 @@ ABORT" 的編譯期行為：
 
 直譯期行為：檢查堆疊頂端，若為真則呼叫 `THROW-ERRMSG`（擲回 -2 例外帶錯誤訊息），否則丟棄字串。
 
-注意第 123 行的 `( never )` 註解：在直譯模式下，`ROT IF THROW-ERRMSG THEN 2DROP` 實際上永遠不會執行到 `THROW-ERRMSG`，因為 `IF` 只在堆疊頂端為真時執行，而前面沒有推入任何值——但實際上 `ROT` 會將解析的字串地址放到堆疊底部，旗標留在堆疊頂端。不過這段程式碼的設計有點不透明，需要仔細追蹤堆疊才能理解。
+注意第 123 行的 `( never )` 註解：在直譯模式下，`ROT IF THROW-ERRMSG THEN 2DROP` 實際上永遠不會執行到 `THROW-ERRMSG`，因為 `IF` 只在堆疊頂端為真時執行，而前面沒有推入任何值——但實際上 `ROT` 會將解析的字串位址放到堆疊底部，旗標留在堆疊頂端。不過這段程式碼的設計有點不透明，需要仔細追蹤堆疊才能理解。
 
 ### 13.6 數字解析：?SLITERAL1 與 ?SLITERAL2
 
@@ -1716,20 +1716,19 @@ DO 的編譯結果：
         ...迴圈體...           ; 迴圈起始（HERE 點）
 ```
 
-注意 DO 推入了 3 個值到回返堆疊：
-1. **LEAVE 目標位址**（用於迴圈中途退出）
-2. **EDX**（保存暫存器）
-3. **EBX**（保存暫存器）
+注意要區分兩種視角，避免混淆：
 
-加上迴圈界限和索引，回返堆疊佈局為：
+**(1) DO prologue 三個 PUSH 剛執行完的瞬間佈局** — 依 `PUSH imm32 → PUSH EDX → PUSH EBX` 的順序，PUSH 會讓 ESP 遞減，因此最後 push 的 EBX 在最上面：
 
 ```
-ESP →   [迴圈索引]        ← I 可讀取
-ESP+4 → [迴圈界限]        ← 界限值
-ESP+8 → [EBX保存值]
-ESP+12 → [EDX保存值]
-ESP+16 → [LEAVE目標位址]
+ESP+0  → [EBX 保存值]      ← 最後 push，位於頂端
+ESP+4  → [EDX 保存值]
+ESP+8  → [LEAVE 目標位址]  ← imm32，最先 push
 ```
+
+**(2) 進入迴圈體後的概念佈局** — 此時 `C-DO` 已把界限與索引轉成迴圈計數器放在 `EDX`／`EAX` 等暫存器中（`I` 由暫存器計算，不是直接讀 ESP 頂端）；回返堆疊上保留的是上面那三項（EBX、EDX、LEAVE 目標）。`LOOP`／`+LOOP` 收尾時用 `LEA ESP, 0C [ESP]` 一次清掉這 3 個 4-byte 項（共 12 = 0x0C 位元組），再回填 LEAVE 目標。
+
+> 換言之，「迴圈索引／界限」並不是固定躺在 `ESP+0`／`ESP+4`；那是計數器在暫存器中的邏輯狀態。堆疊上真正存的是 EBX／EDX 的保存值與 LEAVE 目標位址。
 
 ### 14.5 LOOP 與 +LOOP
 
