@@ -145,17 +145,19 @@ END-CODE
 ;
 ```
 
-**WINAPLINK 鏈**：`WINAPLINK` 維護一個所有已宣告的 WinAPI 函式的鏈表，每個 entry 包含：winproc 位址（遲遲解析）、DLL 名稱、函式名稱、參數數量。`ERASE-IMPORTS` 遍歷此鏈並清除所有 winproc 位址，強制重新解析。
+**WINAPLINK 鏈**：`WINAPLINK` 維護一個所有已宣告的 WinAPI 函式的鏈表。每個鏈節點實際包含前方四欄 `{winproc, libname, funcname, params}`，若不是 temp wordlist，還會在後面再加一個**鏈結 cell**，而 `WINAPLINK` 指向的是這個鏈結 cell（`spf_win_defwords.f:14-23`）。因此 `ERASE-IMPORTS`（`spf_win_defwords.f:83-91`）用 `DUP 4 CELLS -` 從鏈結 cell 回退到 winproc 欄位並清零，強制下次呼叫重新解析。winproc 欄位在定義時初始為 0，要到第一次呼叫才被填入（見 §2.2）。
 
 ### 2.2 WINAPI: 與 EXTERN 的對比
 
 | 特性 | POSIX (`EXTERN`) | Windows (`WINAPI:`) |
 |------|------------------|---------------------|
 | 語法 | `xt n EXTERN` | `WINAPI: libname funcname` |
-| 解析時機 | 第一次呼叫時（延遲） | 定義時立即解析 |
+| 解析時機 | 第一次呼叫時（延遲） | 定義時**驗證** DLL/函式可載入；實際函式位址仍延遲到首次呼叫才解析並快取（見下） |
 | 匯入機制 | `dlopen`/`dlsym` | `LoadLibraryA`/`GetProcAddress` |
 | 呼叫約定 | cdecl | stdcall |
-| 錯誤處理 | `dl-no-library`/`dl-no-symbol` | `LIB-ERROR`/`PROC-ERROR` |
+| 錯誤處理 | `dl-no-library`/`dl-no-symbol` | 定義期 `-2009`/`-2010` THROW；執行期 `LIB-ERROR`/`PROC-ERROR` |
+
+> **澄清（解析時機）**：`__WIN:`（`spf_win_defwords.f:14-30`）在定義時呼叫 `LoadLibraryA`/`GetProcAddress`，但**只用來驗證**該 DLL 與函式存在（失敗則 `-2009`/`-2010` THROW），並**不**把位址寫進 winproc 欄位。真正的函式位址要到第一次呼叫該字、由 `_WINAPI-CODE`（`spf_win_api.f:71-83`）看到 winproc 欄位為 0 時才 `CALL AO_INI` 解析，並 `MOV [EBX], EAX` 快取起來。所以 Windows 其實也是**延遲解析 + 快取**，只是多了一道定義期可載入性檢查。
 
 ### 2.3 Windows EXTERN（spf_win_defwords.f:52-58）
 
@@ -209,7 +211,7 @@ WINAPI: HeapCreate                    KERNEL32.DLL
 ...                                   ...
 ```
 
-這些宣告在 `spf.f` 載入時解析 DLL 並寫入 `WINAPLINK` 鏈。各功能檔案（`spf_win_io.f`、`spf_win_memory.f` 等）直接使用這些已宣告的名稱，不必重複 `WINAPI:`。這相當於 POSIX 版將 `dlopen`/`dlsym` 快取在符號表中的角色。
+這些宣告在 `spf.f` 載入時建立 `WINAPLINK` 鏈節點並驗證 DLL/函式可載入；但實際函式位址初始為 0，要到首次呼叫時才由 `_WINAPI-CODE`/`AO_INI` 寫入 winproc 欄位（見 §2.2）。各功能檔案（`spf_win_io.f`、`spf_win_memory.f` 等）直接使用這些已宣告的名稱，不必重複 `WINAPI:`。這相當於 POSIX 版以 `dlopen`/`dlsym` 延遲解析並快取符號的角色。
 
 ---
 
@@ -278,7 +280,7 @@ Windows 版使用 `HeapCreate`/`HeapAlloc` 而非 `malloc`/`mmap`：
 ;
 ```
 
-**TLS 整合**：`TlsIndex!` 在 Windows 版同樣存在，用於設定執行緒的 TLS 基底指標。`HeapAlloc` 配置的記憶體區塊由 `TlsIndex!` 寫入第一個 cell，儲存回返位址。
+**TLS 整合**：`TlsIndex!` 在 Windows 版同樣存在，用於設定執行緒的 TLS/EDI 基底指標。在 `SET-HEAP`（`spf_win_memory.f:37-48`）中，`TlsIndex!` 只把 EDI/TLS 基底設為配置區塊的 `CELL+`；返回位址是另外寫到 `TlsIndex@ CELL-`（使用者區塊**前一個** cell），不是由 `TlsIndex!` 寫入第一個 cell。
 
 ### 3.4 ALLOCATE-RWX 的差異
 
@@ -291,7 +293,7 @@ Windows 版使用 `HeapCreate`/`HeapAlloc` 而非 `malloc`/`mmap`：
 ;
 ```
 
-Windows 的 `HeapAlloc` 預設配置可讀寫可執行的記憶體，不需要像 POSIX 那樣使用 `mprotect` 設定分頁保護。
+Windows 版的 `ALLOCATE-RWX`（`spf_win_memory.f:139-141`）此處直接用 `HeapAlloc`（HEAP_ZERO_MEMORY），並未像 POSIX 那樣呼叫 `mprotect` 設定分頁保護（原始碼註解只寫「Windows requires no special care」）。但這不代表 `HeapAlloc` 本身保證 RWX——在啟用 DEP/NX 的環境下，是否可執行取決於系統設定，文件不應宣稱 `HeapAlloc` 必然配置可執行記憶體。
 
 ---
 
@@ -340,7 +342,7 @@ Windows 版的 `TERMINATE` 在結束前銷毀執行緒堆積（`DESTROY-HEAP`）
 
 | POSIX | Windows SEH |
 |-------|-------------|
-| `sigaction` | `SetUnhandledExceptionFilter` |
+| `sigaction` | `FS:[0]` SEH registration（`SET-EXC-HANDLER`），非 `SetUnhandledExceptionFilter` |
 | `ucontext_t` | `EXCEPTION_POINTERS` |
 | `CONTEXT_EDI` 等偏移 | 透過 `CONTEXT` 結構體成員 |
 | `signum>ior` | 例外碼直接對應 Forth 例外 |
@@ -384,7 +386,7 @@ Windows 版的 `TERMINATE` 在結束前銷毀執行緒堆積（`DESTROY-HEAP`）
 Windows 版不同於 POSIX：
 - 無 `dl-init`（動態連結在 Windows 上是靜態匯入）
 - 無 `set-errsignal-handler`（SEH 取代信號處理）
-- 無 `ALLOCATE-THREAD-MEMORY`（每個執行緒有獨立 Heap）
+- 不使用 POSIX 的 `ALLOCATE-THREAD-MEMORY`，改用 `CREATE-HEAP`/`CREATE-PROCESS-HEAP` → `SET-HEAP`（`spf_win_memory.f:37-48`）：同時建立 heap 並配置 USER/TLS 區、設定 `TlsIndex!`
 
 ### 5.4 例外處理器本體（spf_win_except.f）
 
@@ -399,7 +401,7 @@ Windows 版不同於 POSIX：
 ;
 ```
 
-`HALT` 是 Windows 版的「優雅死亡」：先執行執行緒最終化、再執行程序最終化（`DESTROY-HEAP`），最後呼叫 `ExitProcess`。這與 POSIX 版 `HALT` 呼叫 `_exit` 的語意相同。
+`HALT` 是 Windows 版的「優雅死亡」：先執行執行緒最終化、再執行程序最終化（`DESTROY-HEAP`），最後呼叫 `ExitProcess`。這與 POSIX 版 `HALT`（`src/posix/except.f:16-20` 呼叫 C 的 `exit`）語意相同。
 
 #### (EXC) — SEH 處理器核心
 
@@ -428,10 +430,10 @@ Windows 版不同於 POSIX：
 
 `(EXC)` 的參數是 SEH 呼叫慣例：`ExceptionRecord`（例外記錄）、`EstablisherFrame`（目前 SEH 框架位址）、`ContextRecord`（執行緒上下文）、`DispatcherContext`（分派器上下文）。它執行以下步驟：
 
-1. **恢復 SEH 鏈**：`OVER DUP 0 FS!` 從 `EstablisherFrame` 取出上一層 SEH 記錄，寫回 `FS:[0]`。這與 POSIX 信號處理器恢復 `sa_mask` 的語意類似——防止同一例外無限遞迴。
+1. **恢復 SEH 鏈**：`OVER DUP 0 FS!` 從 `EstablisherFrame` 取出上一層 SEH 記錄，寫回 `FS:[0]`，恢復 SEH 鏈頂端。可對照 POSIX `(errsignal)` 恢復 `CONTEXT_EDI` 到 `TlsIndex!` 的動作；但 POSIX 端並沒有在 handler 內手動恢復 `sa_mask`（signal mask 是由 kernel/`sigaction` 機制處理）。
 2. **恢復 TLS**：`CELL+ CELL+ @ TlsIndex!` 從 `EstablisherFrame+8` 取出儲存的 TLS 基底，寫入 `EDI`。這是 Windows 版 `CATCH/THROW` 能跨 SEH 運作的關鍵。
 3. **Ctrl+C 特殊處理**：`0xC000013A`（`CONTROL_C_EXIT`）在 Wine 上由 Ctrl+C 觸發，直接呼叫 `HALT`。
-4. **無 CATCH 時終止**：若 `HANDLER @ = 0`（沒有 `CATCH` 框架），執行 `DESTROY-HEAP` 後以 `-1` 結束執行緒。這對應 POSIX 版信號處理器中的 `ABORT`。
+4. **無 CATCH 時終止**：若 `HANDLER @ = 0`（沒有 `CATCH` 框架），Windows 版執行 `DESTROY-HEAP` 後以 `ExitThread` 結束執行緒。POSIX 端對應的情形則是 `(errsignal)` 把信號 `THROW` 出去後，因為沒有 handler，進入一般 Forth 無 handler 的致命錯誤流程（`FATAL-HANDLER`），並非 signal handler 內直接呼叫 `ABORT`。
 5. **FPU 重置**：`FINIT` 清除 x87 可能的異常狀態，避免 FPU 控制字污染後續浮點運算。
 6. **THROW**：`@ THROW` 將 `ExceptionRecord->ExceptionCode` 作為 Forth 例外號碼拋出，讓上層 `CATCH` 捕獲。
 
@@ -458,7 +460,7 @@ Windows 版不同於 POSIX：
 - `['] DROP-EXC-HANDLER >R` 作為「返回後的清理動作」
 - `>R >R` 恢復正常的返回位址
 
-這與 POSIX 版 `CATCH` 將 `HANDLER` 串列節點壓入資料堆疊的機制異曲同工，只是 Windows 使用**硬體定義的 SEH 鏈**（`FS:[0]`），而 POSIX 使用**軟體模擬的例外鏈**（`HANDLER` 變數）。
+`HANDLER` 其實是**跨平台的 Forth 例外鏈**（`CATCH`/`THROW` 機制），不是 POSIX 專屬。差別在於硬體信號/例外如何轉入這條鏈：POSIX 以 `sigaction` 把信號轉成 `THROW`，Windows 以 `FS:[0]` SEH frame 轉入。
 
 > 對照閱讀：POSIX 版的 `(errsignal)` 與 `SET-ERR-SIGNAL-HANDLER` 請見 [04-posix-platform.md §12.2](04-posix-platform.md#122-errsignal信號處理器)。
 
@@ -511,7 +513,7 @@ Windows 版不同於 POSIX：
 | 輸出 | 呼叫 gcc 連結 | 修改現有 PE 模板 |
 | 動態連結 | `.dltable`/`.dlstrings` | 匯入表（import table） |
 | 重定位 | ELF relocations | PE relocations |
-| 基底位址 | `IMAGE-START`=0x8050000 | `IMAGE-BASE`=0x400000 |
+| 基底位址 | `IMAGE-START`=0x8050000 | `IMAGE-BASE` = `ORG-ADDR − 0x2000`（`spf_pe_save.f:14`），非 PE 預設 0x400000 |
 
 ### 7.2 PE 模板機制
 
@@ -676,17 +678,17 @@ CODE AO_INI
 END-CODE
 ```
 
-`AO_INI` 在啟動時解析 `LoadLibraryA` 和 `GetProcAddress` 的位址，並儲存到 `AOLL` 和 `AOGPA` 變數。這與 ELF 的延遲解析（lazy resolution）不同，PE 版本在啟動時就解析這兩個核心函數。
+`AOLL` 與 `AOGPA` **不是**儲存解析後函式位址的變數；它們記錄的是 `AO_INI` 機器碼中 `MOV EAX, [AddrOfLoadLibrary]` / `MOV EAX, [AddrOfGetProcAddress]` 這兩道指令裡引用 IAT 欄位的 4-byte 位置（`spf_win_api.f:22-34` 的 `A; HERE 4 - ' AOLL EXECUTE !`）。`LoadLibraryA`/`GetProcAddress` 的實際位址由 PE loader 在程序啟動時填入 IAT；`AO_INI` 在需要解析某個 WinAPI wrapper 時，才透過這些 IAT 欄位呼叫核心函式。
 
 #### 7.4.6 PE vs ELF 動態連結對照
 
 | 特性 | ELF（POSIX） | PE（Windows） |
 |------|--------------|---------------|
-| 匯入資訊位置 | `.dynsym`、`.dynstr`、`.rel.dyn` | `.idata`（匯入表） |
-| 函數解析時機 | 延遲解析（lazy binding，首次呼叫時） | 啟動時解析（EAGER） |
-| 解析機制 | PLT/GOT（Procedure Linkage Table） | IAT（Import Address Table） |
-| 延遲解析控制 | `LD_BIND_NOW` 環境變數 | 無（總是啟動時解析） |
-| SP-Forth 實作 | `dl-init` + `symbol-address` | `AO_INI` 直接呼叫 `LoadLibraryA`/`GetProcAddress` |
+| 匯入資訊位置 | `.dltable`/`.dlstrings`（SP-Forth 自管） | `.idata`（殼層 IAT，PE loader 處理） |
+| 殼層核心匯入解析時機 | 啟動時由 `dl-init` 開啟 | 啟動時由 PE loader 填 IAT（`LoadLibraryA`/`GetProcAddress`） |
+| SP-Forth 宣告的其他外部函式 | 延遲解析（首次呼叫 `symbol-address`） | 延遲解析（首次呼叫 `_WINAPI-CODE` → `AO_INI`），解析後快取於 winproc 欄位 |
+| 解析機制 | `symbol-address` + 快取 | IAT（Import Address Table）+ winproc 欄位快取 |
+| SP-Forth 實作 | `dl-init` + `symbol-address` | PE loader 填 IAT + `AO_INI`（首次呼叫 lazy 解析並快取） |
 
 ---
 
@@ -712,7 +714,7 @@ Windows 版使用 Win32 `CreateFileA`/`ReadFile`/`WriteFile` 家族實作 ANS Fo
 
 | Forth 參數 | Win32 參數 | 說明 |
 |-----------|-----------|------|
-| `fam`（長度被捨棄） | `dwDesiredAccess` | 存取模式（`O_RDONLY`/`O_WRONLY`/`O_RDWR`） |
+| `fam`（`NIP` 丟棄的是檔名長度 `u`，不是 `fam`） | `dwDesiredAccess` | 存取模式（`O_RDONLY`/`O_WRONLY`/`O_RDWR`） |
 | `CREATE_ALWAYS` | `dwCreationDisposition` | 總是建立新檔，若存在則覆蓋 |
 | `0` | `lpSecurityAttributes` | 無安全描述元 |
 | `0` | `dwShareMode` | 不共享 |
@@ -768,7 +770,7 @@ USER lpDistanceToMoveHigh
 2. 讀取一塊資料（含行尾字元）
 3. 用 `EOLN SEARCH` 找行尾
 4. 若找到，將檔案位置重置到行尾之後，回傳該行長度
-5. 若未找到，回傳已讀長度與 `flag=false`
+5. 若本次未找到 EOLN，回傳已讀長度、`flag=true`、`ior=0`（與 POSIX 版相同）；只有 EOF/讀不到資料時才是 `flag=false`
 
 `WRITE-LINE`（第 238-248 行）則是 `WRITE-FILE` 接著寫出 `EOLN`。
 
@@ -779,7 +781,7 @@ USER lpDistanceToMoveHigh
 | `DELETE-FILE` | `DeleteFileA` | 刪除檔案 |
 | `FLUSH-FILE` | `FlushFileBuffers` | 強制寫入磁碟 |
 | `FILE-EXIST` | `GetFileAttributesA` | 檢查檔案/目錄是否存在 |
-| `FILE-EXISTS` | `GetFileAttributesA` + `FILE_ATTRIBUTE_DIRECTORY` 遮罩 | 只檢查檔案（排除目錄） |
+| `FILE-EXISTS` | `GetFileAttributesA` + `FILE_ATTRIBUTE_DIRECTORY` 遮罩 | 存在且不是目錄（不等同嚴格的 regular-file 判斷） |
 | `RESIZE-FILE` | `SetEndOfFile` | 先 `REPOSITION-FILE` 再截斷 |
 
 ### 8.6 Windows vs POSIX 檔案 I/O 對照
@@ -826,12 +828,12 @@ CREATE INPUT_RECORD ( /INPUT_RECORD) 20 2 * CHARS ALLOT
 ;
 ```
 
-`EKEY` 讀取一個 `INPUT_RECORD` 結構（大小約 20 bytes），解析其中的 `KEY_EVENT`：
+`EKEY` 的 `INPUT_RECORD` buffer 配置 40 bytes（`spf_win_con_io.f:20`）；呼叫 `ReadConsoleInputA` 時傳入 count `2`（要求讀 2 筆記錄的空間），然後解析 buffer 起始的第一筆 key event。它打包出的複合值：
 - 低 16 位元：`AsciiChar`
 - 次 16 位元：`wVirtualScanCode`
 - 最高 8 位元：`bKeyDown`（按鍵按下或放開）
 
-這與 POSIX 版直接讀取原始位元組完全不同——POSIX `EKEY` 通常直接回傳終端機輸入的 escape sequence 或 Unicode byte。
+（這些是 SP-Forth code 實際使用的 offset，不是 canonical Win32 `INPUT_RECORD` 宣告。）POSIX 平台層這裡沒有對應的 `EKEY` 逐位元解析；互動輸入主要走 `ACCEPT`/`READ-LINE`，`KEY`/`KEY?` 預設為 `FALSE`，可由其他終端機模組替換。
 
 ### 9.2 高階鍵盤輸入
 
@@ -849,13 +851,13 @@ VARIABLE PENDING-CHAR
 ;
 ```
 
-`KEY?` 與 `KEY` 使用 `PENDING-CHAR` 變數作為單字元緩衝區，這與 POSIX 版（`spf_con_io.f`）的 `PENDING-CHAR` 機制完全一致。`EKEY>CHAR`（第 46-52 行）將 `EKEY` 回傳的複合值解碼為 ASCII 字元：若 `KeyDownFlag=0`（放開事件）或 `AsciiChar=0`（功能鍵），則回傳「無字元」。
+`KEY?` 與 `KEY` 使用 `PENDING-CHAR` 變數作為單字元 look-ahead 緩衝區（`PENDING-CHAR` 定義在 Windows 的 `spf_win_con_io.f:62`）。POSIX 預設的控制台層（`posix/con_io.f`）**沒有**相同的 `PENDING-CHAR` 機制，跨平台共用的 `spf_con_io.f` 也沒有。`EKEY>CHAR`（第 46-52 行）將 `EKEY` 回傳的複合值解碼為 ASCII 字元：若 `KeyDownFlag=0`（放開事件）或 `AsciiChar=0`（功能鍵），則回傳「無字元」。
 
 ### 9.3 與 POSIX 控制台 I/O 對照
 
 | 特性 | POSIX（`posix/con_io.f`） | Windows（`spf_win_con_io.f`） |
 |------|--------------------------|-------------------------------|
-| 輸入 API | `read` / `getc` | `ReadConsoleInputA` |
+| 輸入 API | 行輸入 `ACCEPT`/`READ-LINE`；`KEY`/`KEY?` 預設未實作（`FALSE`） | `ReadConsoleInputA` |
 | 事件類型 | 原始位元流 | `INPUT_RECORD`（鍵盤/滑鼠/視窗） |
 | 特殊鍵處理 | Escape sequence 解析 | `wVirtualScanCode` + `bKeyDown` |
 | 掛起字元緩衝 | `PENDING-CHAR` | `PENDING-CHAR`（相同機制） |
@@ -931,7 +933,7 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 |------|-------|---------|
 | 堆積 API | `malloc`/`free` | `HeapAlloc`/`HeapFree` |
 | 私有堆 | — | `HeapCreate` |
-| 可執行記憶體 | `mmap` + `mprotect` | `HeapAlloc`（天然可執行） |
+| 可執行記憶體 | `aligned_alloc` + `mprotect(PROT_READ\|PROT_WRITE\|PROT_EXEC)` | `HeapAlloc`（此版本未額外設定頁面保護，不保證 RWX） |
 | 除錯標記 | `FIX-MEMTAG` | `FIX-MEMTAG` |
 
 ---
