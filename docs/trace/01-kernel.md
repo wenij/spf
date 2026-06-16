@@ -170,7 +170,7 @@ END-CODE
 
 **為什麼要用 `POP EAX` 而不是 `MOV EAX, [ESP]` + `ADD ESP, 4`？**
 
-因為在 SP-Forth 的執行緒式碼中，每個 CODE 定義的末尾都有 `RET` 指令。當 Forth 引擎呼叫一個字時，`CALL CFA` 會將返回位址推入 ESP，然後 CFA 中的 `JMP _CREATE-CODE` 跳到執行碼。此時 ESP 指向「下一個要被執行的指令位址」（即 PFA 位址，因為 SP-Forth 將 PFA 位址放在 CFA 後面，而呼叫慣例使用 CALL+RET 模式傳遞 PFA）。
+因為 SP-Forth 的定義執行碼欄位本身就是一條 `CALL rel32`（見 `spf_compile.f:19-29` 的 `_COMPILE,` 寫入 `0E8 C,`）。執行該字時，CPU 直接呼叫 `_CREATE-CODE`（不是先 `CALL CFA` 再由 CFA 內的 `JMP` 跳轉），並把 `CALL` 後的位址——也就是 PFA 起點——推入回返堆疊。因此 `_CREATE-CODE` 末尾用 `POP EAX` 就能取得 PFA。
 
 #### 2.2.2 CONSTANT — `_CONSTANT-CODE`
 
@@ -193,11 +193,11 @@ END-CODE
 假設 CONSTANT FOO 定義為 42：
 
 定義體結構：
-  CFA: JMP _CONSTANT-CODE
-  PFA: 42  ← 4 位元組的整數值
+  xt: CALL _CONSTANT-CODE   ← 執行碼欄位本身是一條 CALL（5 bytes）
+  PFA: 42  ← 緊跟在 CALL 之後的 4 位元組整數值
 
 執行 FOO 時：
-  1. CALL CFA → JMP _CONSTANT-CODE
+  1. CALL _CONSTANT-CODE（CALL 把其後的 PFA 位址壓入回返堆疊）
   2. ESP 指向 PFA 位址
   3. LEA EBP, -4[EBP]; MOV [EBP], EAX  → 推入舊 TOS
   4. POP EAX → EAX = PFA 位址
@@ -307,7 +307,7 @@ CODE _SLITERAL-CODE
 END-CODE
 ```
 
-**行為**：這是 `S"` 和 `SLITERAL` 的執行期碼。它從資料流中讀取一個計數字串（以長度位元組開頭，以 `0` 位元組結尾的對齊填充），並將其位址和長度推上資料堆疊。
+**行為**：這是 `S"` 和 `SLITERAL` 的執行期碼。它從資料流中讀取一個計數字串（以長度位元組開頭），並跳過編譯器額外放在字串後的 1 個 `0` 終止位元組（這是固定的終止零，不是對齊填充），然後將字串位址與長度推上資料堆疊。
 
 **堆疊效果**：`( -- c-addr u )`
 
@@ -532,7 +532,7 @@ END-CODE
 
 注意 `!` 需要彈出兩項（值和位址），所以需要從堆疊中取回第三項作為新的 TOS。
 
-#### 3.4.3 `+!` — 原子加法
+#### 3.4.3 `+!` — 記憶體加法（非原子）
 
 ```asm
 CODE +! ( n|u a-addr -- ) \ 94
@@ -558,7 +558,7 @@ CODE * ( n1|u1 n2|u2 -- n3|u3 ) \ 94
 END-CODE
 ```
 
-`IMUL` 是 x86 的帶號乘法指令，其單運算元形式將結果截斷為 32 位元存入 EAX。這對於 Forth 的 `*` 操作已經足夠，因為 Forth 標準只要求 32 位元的低位部分結果。
+`IMUL` 是 x86 的帶號乘法指令；單運算元形式 `IMUL r/m32` 會產生 64 位元結果於 `EDX:EAX`。SP-Forth 的 `*` 只保留低 32 位元的 `EAX` 作為標準單儲存格結果，忽略高 32 位元的 `EDX`。這對於 Forth 的 `*` 已經足夠，因為標準只要求單儲存格（低位）結果。
 
 **雙精確度乘法**由 `M*` 和 `UM*` 提供：
 
@@ -593,7 +593,7 @@ CODE C-DO
    LEA EBP, 8 [EBP]     ; 彈出兩項（界限和索引）
    MOV  EBX, EAX         ; EBX = 索引（TOS）
    ADD  EAX, # 80000000  ; EAX = 索引 + 0x80000000（調整為無號比較）
-   SUB  EAX, -8 [EBP]    ; EAX = (索引 + 0x80000000) - (界限 + 0x80000000)
+   SUB  EAX, -8 [EBP]    ; EAX = (索引 + 0x80000000) - 界限（只減原始界限）
    MOV  EDX, EAX         ; EDX = 迴圈計數器
    MOV  EAX, -4 [EBP]    ; EAX = 繼續執行的返回值
    MOV  EDX, EDX          ; NOP（最佳化器的佔位符）
@@ -614,10 +614,10 @@ END-CODE
 ; DO 部分（C-DO + PUSH 界限/索引）
 ; ... 迴圈體 ...
 ; LOOP 部分：
-   INC DWORD [ESP]        ; 索引++
-   INC DWORD 4[ESP]       ; 界限計數器++
+   INC DWORD [ESP]        ; 目前索引++
+   INC DWORD 4[ESP]       ; 偏移計數器++（供 JNO 判斷）
    JNO loop_start          ; 若無溢位則繼續
-   LEA ESP, 0xC[ESP]      ; 清理迴圈參數
+   LEA ESP, 0xC[ESP]      ; 清理 3 個 cell（索引、偏移計數器、LEAVE 目標）
 ```
 
 #### 3.6.2 `C-?DO` — 條件 DO 迴圈
@@ -810,7 +810,7 @@ END-CODE
 
 **為什麼要切換捨入模式？**
 
-因為 `FRNDINT` 需要「截斷」模式（向零捨入），以確保整數部分正確。FPU 預設的捨入模式是「最近偶數」，這會導致 `FRNDINT(0.5) = 0`（而不是 1），使指數函數計算出錯。
+`FEXP` 把 `FRNDINT` 切到「截斷」模式（向零捨入），讓 `n` 成為朝零取整的整數部分、`f = t - n` 成為 `F2XM1` 使用的小數部分，計算完再恢復原本的 FPU 控制字以免影響呼叫端的捨入設定。重點不在於預設的「最近偶數」會「必然算錯」，而在於 `2^t = 2^n · 2^f` 這個拆解需要 `n` 是朝零取整的整數、`f` 落在 `F2XM1` 可接受的範圍，截斷模式正好保證這點。
 
 ### 4.4 浮點常值編碼
 
@@ -838,7 +838,7 @@ END-CODE
 
 **為什麼有兩種格式？**
 
-x87 FPU 內部使用 80 位元擴充精度格式，但記憶體中可以儲存為 64 位元 double 或 80 位元 extended。`_FLIT-CODE8` 用於 `2.E`、`10.E` 等精確值（使用 64 位元儲存），而 `_FLIT-CODE10` 用於一般浮點常值（保留完整 80 位元精度）。
+x87 FPU 內部使用 80 位元擴充精度格式，但記憶體中可以儲存為 64 位元 double 或 80 位元 extended。`_FLIT-CODE8` 用於執行期載入編譯在程式碼流中的 8-byte double literal，`_FLIT-CODE10` 用於載入 10-byte x87 extended literal。`2.E`、`10.E` 則是獨立的 CODE 常數字（`spf_floatkern.f:11`、`:17`），直接以 `FILD DWORD` 從整數常數載入 FPU，不經 `_FLIT-CODE8`。
 
 ### 4.5 FPU 控制字操作
 
@@ -936,7 +936,7 @@ SP-Forth 支援兩種換行模式：
 
 **為什麼需要「智慧」搬移？**
 
-當來源區域和目標區域重疊時（例如將陣列中的元素向低位址平移），順向複製（CMOVE）會破壞尚未搬移的資料。`MOVE` 透過比較位址來決定使用順向（CMOVE）或反向（CMOVE>）複製，確保重疊區域的正確性。
+當來源與目標重疊、且目標起點落在來源區間內較高位址時（向高位址搬移），順向複製（CMOVE）會先覆寫到尚未讀取的來源資料。此時 `MOVE` 改用 `CMOVE>` 由高位址往低位址複製；若目標在來源之前、或沒有這種重疊，則用 `CMOVE`。`MOVE` 以比較 `addr1 < addr2 < addr1+u` 來決定方向（`spf_forthproc_hl.f:43-51`）。
 
 ### 5.4 NUMBER 轉換相關
 
@@ -1000,35 +1000,32 @@ LEA EBP, 4[EBP]     ; 彈出次項
 
 ### 6.2 回返堆疊與 Forth 迴圈模型
 
-SP-Forth 的 DO...LOOP 迴圈使用回返堆疊儲存三個值：
+SP-Forth 的 DO...LOOP 並不是把「limit」與「index」原樣固定放在回返堆疊上。`C-DO`（`spf_forthproc.f:1210-1218`）先算出偏移計數器 `EDX = (index + 0x80000000) - limit`，並保留原始 index 於 `EBX`；接著 `DO`（`spf_immed_loop.f:15-36`）依序編譯 `PUSH imm32`（LEAVE 目標）、`PUSH EDX`（偏移計數器）、`PUSH EBX`（目前索引）。因此進入迴圈體時，回返堆疊頂端通常是：
 
 ```
 回返堆疊（由 ESP 指向）：
 
-  ESP+12  ← 迴圈界限（limit）
-  ESP+8   ← 迴圈索引（index，已偏移 0x80000000）
-  ESP+4   ← 迴圈後的返回位址（由 DO 的 inline PUSH 放入）
-  ESP+0   ← 目前字的返回位址
+  ESP+0   ← 目前索引（index，原始值，I 由此讀取）
+  ESP+4   ← 偏移計數器（C-DO 算出的 (index+0x80000000)-limit）
+  ESP+8   ← LEAVE 目標位址（DO 的 PUSH imm32 放入）
 ```
 
-C-DO 將索引加上 `0x80000000` 的偏移量，使得帶號比較可以用無號溢位（`JNO`）來檢測迴圈結束。這是一個非常聰明的最佳化技巧：
+偏移計數器讓帶號迴圈可以用無號溢位（`JNO`）來檢測結束：
 
 ```
 帶號迴圈：10 0 DO ... LOOP
-  索引偏移：0 + 0x80000000 = 0x80000000
-  界限偏移：10 + 0x80000000 = 0x8000000A
-  每次迭代後 INC [ESP] 使索引+1
-  當索引遞增到界限時，INC 不會產生溢位，JNO 繼續迴圈
-  當索引超過界限時（0x8000000A → 0x8000000B），JNO 仍然不會跳
-  但當索引從 0x7FFFFFFF 遞增到 0x80000000 時會溢位，JNO 跳出迴圈
+  偏移計數器初值 = (0 + 0x80000000) - 10 = 0x7FFFFFF6
+  每次 LOOP 對 [ESP] 與 [ESP+4] 同步遞增
+  偏移計數器從 0x7FFFFFFF 遞增到 0x80000000 時會溢位，JNO 跳出迴圈
+  在此之前 JNO 不跳，迴圈繼續
 ```
 
-**LOOP 的編譯輸出**：
+**LOOP 的編譯輸出**（`spf_immed_loop.f:70-80`）：
 ```asm
-INC DWORD [ESP]        ; 索引++
-INC DWORD 4[ESP]      ; 界限計數器++
+INC DWORD [ESP]        ; 目前索引++
+INC DWORD 4[ESP]      ; 偏移計數器++（用於 JNO 判斷）
 JNO loop_start          ; 若無溢位（未完成迴圈），繼續
-LEA ESP, 0xC[ESP]      ; 清理迴圈參數（3 個值）
+LEA ESP, 0xC[ESP]      ; 清理 3 個 cell（索引、偏移計數器、LEAVE 目標）
 ```
 
 ### 6.3 執行緒安全與 TLS 實作

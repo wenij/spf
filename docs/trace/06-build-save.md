@@ -1715,7 +1715,7 @@ Windows 版的 `done.f` 執行：
 | `START-PE-HEADER` | 0x80 | PE 標頭起始偏移 |
 | `SIZE-HEADER` | 0x400 | 標頭總大小 |
 | `BASEOFCODE` | 0x2000 | 程式碼段起始 RVA |
-| `IMAGE-BASE`（Windows） | 0x400000 | 預設映像基底位址 |
+| `IMAGE-BASE`（Windows） | `ORG-ADDR − 0x2000`（見 `spf_pe_save.f:14` `DUP 8 1024 * -`） | SP-Forth 的可載入映像基底常數；**不是** PE 預設的 0x400000。PE 標頭的 ImageBase 欄位另由 `SAVE` 以 `IMAGE-BEGIN − 0x2000` 寫入（`spf_pe_save.f:32`） |
 
 ### 14.4 config.auto.f 常數（Linux x86_64，glibc 2.39）
 
