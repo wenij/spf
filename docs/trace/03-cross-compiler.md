@@ -70,7 +70,7 @@ IMAGE-SIZE = 512 * 1024  (512 KiB 初始映像大小)
 IMAGE-START = 0x8050000  (目標映像基址)
 ```
 
-`IMAGE-START` 在 `src/spf.f` 中對 POSIX / Windows 兩條建構路徑都會先定義。它一方面提供 `virtual-address` 建立 target/host 位址轉換，另一方面在 POSIX 路徑上也會由 `forth.ld` 把 `.forth` 段連到 `0x8050000`。因此它不只是「名目值」，而是交叉編譯期與最終連結期共同使用的映像基址。
+`IMAGE-START` 在 `src/spf.f` 中對 POSIX / Windows 兩條建構路徑都會先定義。它一方面提供 `virtual-address` 建立 target/host 位址轉換，另一方面在 POSIX 路徑上也會由 `forth.ld` 把 `.forth` 段連到 `0x8050000`。因此在 POSIX 路徑中，它不只是「名目值」，而是交叉編譯期位址轉換與最終 ELF 連結共同使用的 `.forth` 基址；Windows 路徑雖也先定義 `IMAGE-START` 供交叉編譯流程使用，但最終 PE 的 `IMAGE-BASE` 另由儲存路徑計算。
 
 ### 2.2 位址轉換函式
 
@@ -606,7 +606,7 @@ IF DP @ 5 - W@ 0x3F0 + DP @ 6 - W! -4 ALLOT THEN
   SetOP 0x68 C, DP @ 4 ALLOT          \ PUSH imm32（LEAVE 目標位址）
   SetOP 0x52 C,                        \ PUSH EDX
   SetOP 0x53 C,                        \ PUSH EBX
-  4 ALIGN-NOP                          \ 16-byte 對齊
+  4 ALIGN-NOP                          \ 依目標交叉編譯器這裡指定的 4-byte 邊界對齊
   DP @ DUP TO :-SET
 ; IMMEDIATE
 ```
