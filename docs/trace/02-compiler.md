@@ -21,7 +21,7 @@ SP-Forth 的編譯流程遵循以下核心概念：
 
 ### 1.2 編譯器模組載入順序與職責
 
-```
+```forth
 spf_parser.f        ← 語法剖析（NextWord, PARSE, SkipDelimiters 等）
 spf_read_source.f   ← 原始碼讀取（REFILL, SOURCE, INCLUDED 等）
 spf_nonopt.f        ← 非最佳化字集（RDROP, >R, R>, EXECUTE 等）
@@ -103,7 +103,7 @@ USER-VALUE TIB  \ 輸入緩衝區起始位址
 
 整個剖析流程可以分解為三個階段：
 
-```
+```forth
 NextWord = SkipDelimiters + ParseWord + 邊界校正
          ┌──────────┐     ┌──────────┐     ┌───────────┐
 輸入流 → │ 跳過空白 │ ──→ │ 解析字詞 │ ──→ │ 校正 >IN  │
@@ -369,7 +369,7 @@ USER DOES>A       \ DOES> 行為指標
 
 `CFL = 5` 定義了 CREATE 類型字的**程式碼欄位長度**。在 SP-Forth 的 IA-32 實作中，這 5 bytes 對應一條 `CALL rel32` 指令（1 byte opcode + 4 bytes 相對位址）。這是 Forth 字頭（header）設計的關鍵常數：
 
-```
+```forth
 Forth 字在記憶體中的佈局（相對 NFA 的位移，見 spf_wordlist.f:129-155 的註解）：
 
   位移
@@ -480,7 +480,7 @@ SFIND 的搜尋策略：
 
 **搜尋順序管理**：SP-Forth 使用 `S-O`（搜尋順序陣列起點）和 `CONTEXT`（指向搜尋順序頂端）組成一個堆疊結構：
 
-```
+```forth
 S-O   → wid_1（最後搜尋）
 S-O+4 → wid_2
 S-O+8 → wid_3
@@ -600,7 +600,7 @@ END-CODE
 
 名稱欄位在記憶體中的佈局：
 
-```
+```forth
          ←── 低位址                          高位址 ──→
     ┌─────┬─────────┬────────┬──────┬─────────┬───────────┐
     │ CFA │ flags(1) │ 長度(1) │ 名稱 │  LFA(4) │ ... PFA    │
@@ -709,7 +709,7 @@ END-CODE
 
 **編譯決策樹**：
 
-```
+```forth
 COMPILE, ( xt )
   │
   ├─ CON>LIT 回傳 FALSE？
@@ -741,7 +741,7 @@ COMPILE, ( xt )
 
 **組合語言對照**：
 
-```
+```forth
 ; LIT, 編譯結果（以 42 LITERAL 為例）：
 LEA EBP, -4 [EBP]   ; 內聯 DUP —— 資料堆疊指標下移，騰出一格
 MOV [EBP], EAX      ; 把舊 TOS 存成新的次項（這就是 DUP 的效果）
@@ -826,7 +826,7 @@ USER ALIGN-BYTES
 
 **SHEADER 的完整流程圖**：
 
-```
+```forth
 SHEADER ( addr u -- )
   │
   ├─ 1. HERE 0 ,          分配 CFA 欄位（初始為 0）
@@ -909,7 +909,7 @@ DOES> 的運作原理是 Forth 最精巧的設計之一：
 
 **記憶體佈局變化**：
 
-```
+```forth
 CREATE 定義後：
   ┌──────────────────┐
   │ _CREATE-CODE 的  │ ← CFA（呼叫時跳到此處）
@@ -1019,7 +1019,7 @@ VOCABULARY 建立的字在執行時會將對應的詞彙表壓入搜尋順序頂
 
 VECT 類似 VALUE 但用於執行向量（execution vector）。其 PFA 結構：
 
-```
+```forth
   ┌──────────────────┐  ← xt（DOES> 指向 _VECT-CODE）
   │ _VECT-CODE CALL  │  ← CFL=5 bytes
   ├──────────────────┤
@@ -1087,7 +1087,7 @@ RECURSE 嘗試使用 `LAST-NON`（:NONAME 定義的 XT），若無則使用 `LAT
 
 INTERPRET 的核心邏輯：
 
-```
+```forth
 INTERPRET_
   │
   ├─ PARSE-NAME → 取得下一個字詞（addr u）
@@ -1106,7 +1106,7 @@ INTERPRET_
 
 `STATE @ =` 的比較是 SP-Forth 中一個精巧的設計。`SFIND` 回傳值：`1`（立即字）、`-1`（非立即字）、`0`（未找到）。`STATE @` 在編譯模式下為 `-1`（TRUE），直譯模式下為 `0`（FALSE）。
 
-```
+```forth
                │ SFIND = 1 (立即) │ SFIND = -1 (非立即)
 ───────────────┼──────────────────┼─────────────────────
 STATE = -1(編譯)│ -1 = 1 → false  │ -1 = -1 → true
@@ -1362,7 +1362,7 @@ USER-CREATE ERR-DATA [T] /err-data [I] TC-USER-ALLOT
 
 這依賴於 VALUE 的字典結構：
 
-```
+```forth
   ┌──────────────────┐ ← xt（VALUE 的起始）
   │ _CONSTANT-CODE   │ ← 0 bytes offset（CFL=5）
   ├──────────────────┤ ← xt + CFL (= xt + 5)
@@ -1471,7 +1471,7 @@ SLITERAL 有三種行為：
 
 `SLIT,`（spf_compile.f 第 99~102 行）的編譯結果：
 
-```
+```forth
   CALL _SLITERAL-CODE    ; 執行期代碼
   <長度>  <字元...>  0   ; 計數字串 + 終止零
 ```
@@ -1616,7 +1616,7 @@ ABORT" 的編譯期行為：
 
 **堆疊追蹤**：
 
-```
+```forth
 : TEST  42 IF ." forty-two" ELSE ." not" THEN ;
 編譯期堆疊變化：
 
@@ -1720,7 +1720,7 @@ DO 的編譯結果：
 
 `DO` 依 `PUSH imm32（LEAVE 目標）→ PUSH EDX（偏移計數器）→ PUSH EBX（目前索引）` 的順序壓入；PUSH 會讓 ESP 遞減，因此進入迴圈體後回返堆疊頂端是：
 
-```
+```forth
 ESP+0  → [目前索引]        ← 最後 push 的 EBX；I 由此讀取
 ESP+4  → [偏移計數器]      ← C-DO 算出的 (index+0x80000000)-limit
 ESP+8  → [LEAVE 目標位址]  ← 最先 push 的 imm32
@@ -1914,7 +1914,7 @@ CASE 結構的編譯期堆疊追蹤：
 
 最佳化器在處理 `COMPILE,` 時的決策路徑：
 
-```
+```forth
 COMPILE, ( xt )
   ├─ CON>LIT 回傳 FALSE？ → 已由 CON>LIT 處理（常數/USER/CREATE 等特殊序列）
   └─ CON>LIT 回傳 TRUE？
@@ -1930,7 +1930,7 @@ COMPILE, ( xt )
 
 以下是 INTERPRET 迴圈的完整決策流程：
 
-```
+```forth
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        INTERPRET 迴圈                               │
 │                                                                     │
@@ -1962,7 +1962,7 @@ COMPILE, ( xt )
 
 ### 17.1 編譯器模組互動圖
 
-```
+```forth
                     ┌──────────────────────┐
                     │   spf_parser.f       │
                     │   NextWord, PARSE    │

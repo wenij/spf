@@ -15,7 +15,7 @@
 
 POSIX 使用 `dlopen`/`dlsym` 動態載入共享函式庫（`.so`），而 Windows 使用**靜態匯入表**（import table）機制。在 SP-Forth 的 Windows 版中，所有外部 DLL 函式都透過 `LoadLibraryA`＋`GetProcAddress` 在執行期解析，並快取在 `WINAPLINK` 表中。
 
-```
+```forth
 POSIX：                          Windows：
 dlopen("lib.so") ──→ dlsym ──→  LoadLibraryA("kernel32.dll")
                                  GetProcAddress(h, "CreateThread")
@@ -202,7 +202,7 @@ END-CODE
 
 `spf_win_proc.f` 是 **Windows API 函式宣告的中心庫**，所有跨檔案共用的 `WINAPI:` 呼叫集中在這裡。它僅包含 41 行 `WINAPI:` 宣告（不包含任何可執行邏輯）：
 
-```
+```forth
 WINAPI: GetStdHandle                  KERNEL32.DLL
 WINAPI: CreateFileA                   KERNEL32.DLL
 WINAPI: ReadFile                      KERNEL32.DLL
@@ -556,7 +556,7 @@ PE 的匯入表是作業系統載入器解析外部 DLL 函數位址的核心機
 
 匯入表位於 `.idata` 節區，包含以下並行陣列結構：
 
-```
+```forth
 .idata 節區佈局：
 ┌────────────────────────────────────────┐
 │ Import Directory Table                 │
@@ -630,7 +630,7 @@ CREATE ImportDirectory
 
 按名稱匯入時，ILT/INT 項目指向此結構：
 
-```
+```forth
 ┌──────────┬────────────────────┐
 │ 2 bytes  │ Hint（匯出表索引提示） │
 │          │ 載入器先用此值快速查找 │
@@ -891,7 +891,7 @@ Windows 版使用 `GetModuleFileNameA` 取得模組路徑：
 
 ### 11.1 FFI 機制對照
 
-```
+```forth
 POSIX：                              Windows：
 dlopen("lib.so") ──→ dlsym ──→     LoadLibraryA("DLL")
                                    GetProcAddress(h, "func")
@@ -933,7 +933,7 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 |------|-------|---------|
 | 堆積 API | `malloc`/`free` | `HeapAlloc`/`HeapFree` |
 | 私有堆 | — | `HeapCreate` |
-| 可執行記憶體 | `aligned_alloc` + `mprotect(PROT_READ\|PROT_WRITE\|PROT_EXEC)` | `HeapAlloc`（此版本未額外設定頁面保護，不保證 RWX） |
+| 可執行記憶體 | `aligned_alloc` + `mprotect(PROT_READ&#124;PROT_WRITE&#124;PROT_EXEC)` | `HeapAlloc`（此版本未額外設定頁面保護，不保證 RWX） |
 | 除錯標記 | `FIX-MEMTAG` | `FIX-MEMTAG` |
 
 ---

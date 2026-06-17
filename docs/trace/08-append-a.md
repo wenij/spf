@@ -1265,7 +1265,7 @@ RET
 
 | 步驟 | 指令 | 為什麼 |
 |------|------|--------|
-| 1 | `MOV EAX, ESP` | 把目前 x86 stack pointer 存到 `EAX`。稍後 Forth 退出時要還原。 |
+| 1 | `MOV EAX, ESP` | 把目前 x86 stack pointer 存到 `EAX`。稍後 Forth 離開時要還原。 |
 | 2 | `SUB ESP, # 3968` | 在 x86 stack 開 3968 bytes 的「工作區」，給 Forth 模擬使用。 |
 | 3 | `A;` | 強迫 assembler 完成 `SUB` 的 emit。 |
 | 4 | `HERE 4 - ' ST-RES 9 + EXECUTE` | 倒回到剛 emit 的 `3968` 欄位，呼叫 Forth 字 `ST-RES 9 +` 把它修成「回填位置」。 |
@@ -1281,7 +1281,7 @@ RET
 - x86 stack / register 保存
 - SP-Forth 資料堆疊重建
 - `A;` 切回 Forth 做組裝期修補
-- callback 返回值整理
+- callback 回傳值整理
 
 建議讀法：
 
@@ -1304,7 +1304,7 @@ RET
 
 在 callback 內部，SP-Forth 要建立自己的 data stack（在 Windows 上就是這 3968 bytes 的保留區）。`EBP` 會被改成指向這塊新區域的某個位置。callback 結束時必須把**外層**的 `EBP` 還原，否則外部 C 程式看到 `EBP` 突然指到奇怪的位址會 crash。
 
-`PUSH EBP` 在進入時保護外層 EBP；退出時由 `MOV EBP, 4 [EAX]` 還原 EBP。`XCHG EAX, [ESP]; RET` 只是 wrapper 的返回位址/回傳值整理序列（把回傳值放進 EAX、返回位址放回堆疊頂端再 `RET`），它**不**負責還原 EBP。
+`PUSH EBP` 在進入時保護外層 EBP；離開時由 `MOV EBP, 4 [EAX]` 還原 EBP。`XCHG EAX, [ESP]; RET` 只是 wrapper 的返回位址/回傳值整理序列（把回傳值放進 EAX、返回位址放回堆疊頂端再 `RET`），它**不**負責還原 EBP。
 
 #### 6.5.3 練習：把它壓成 pseudo-Forth
 
@@ -1368,7 +1368,7 @@ emit 出來的 4-byte displacement 就是：
 
 CALL 的 rel32 計算基準是 **「CALL 指令結束、下一條指令的位址」**（CALL 起點 + 5），不是「CALL 的起始位址」，也不是「rel32 欄位起點」：
 
-```
+```forth
 [ CALL起點   ] 0xE8     \ CALL opcode，1 byte
 [ CALL起點+1 ] rel32    \ 4 byte；emit opcode 後 DP @ 指向這裡
 [ CALL起點+5 ] ← 下一條指令；這才是 rel32 的基準（= DP @ CELL+）

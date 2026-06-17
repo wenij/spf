@@ -103,7 +103,7 @@ SP-Forth IA-32 執行模型最重要的假設是：
 | 線索 | 比較可能的原因 |
 |------|----------------|
 | Forth primitive 之間開始錯 | `EAX` / `EBP` discipline 破壞 |
-| C 函數返回後才錯 | 參數數量、cdecl/stdcall 清理責任、返回值寬度 |
+| C 函數返回後才錯 | 參數數量、cdecl/stdcall 清理責任、回傳值寬度 |
 | callback 進入後才錯 | `_WNDPROC-CODE` / callback bridge 沒保存必要暫存器 |
 | signal 後 `THROW` 又 crash | `EDI` / USER 區恢復失敗 |
 

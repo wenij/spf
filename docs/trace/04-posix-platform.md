@@ -105,7 +105,7 @@ END-CODE
 
 **C-CALL 的完整執行流程**：
 
-```
+```forth
 呼叫前堆疊（TOS-in-EAX 模型）：
   EAX = adr（C 函數位址，即 TOS）
   [EBP]   = n（引數數量）
@@ -305,7 +305,7 @@ RTLD_GLOBAL RTLD_LAZY OR CONSTANT DLOPEN-FLAG
 
 這四個字提供了一個巧妙的語法糖，讓 Forth 程式能以類似 C 函數呼叫的語法呼叫外部函數：
 
-```
+```forth
 2 (( pthread_create )) thread attr start arg
 ```
 
@@ -405,7 +405,7 @@ O_RDWR   CONSTANT R/W    \ 2 — 讀寫開啟
 
 `ALLOCATE` 的記憶體佈局：
 
-```
+```forth
   ┌──────────────┐ ← a-addr - CELL（calloc 回傳的位址 - 1）
   │ u + CELL     │ ← 除錯標記：記錄分配大小
   ├──────────────┤ ← a-addr（回傳給使用者的位址）
@@ -821,7 +821,7 @@ POSIX 版的控制台 I/O 極為簡潔：
 
 `EXTERN` 建立一個可被 C 呼叫的函數包裝器：
 
-```
+```forth
 EXTERN 包裝器的記憶體佈局：
   ┌──────────────────┐ ← xt2
   │ PUSH n            │ ← 引數數量
@@ -845,7 +845,7 @@ EXTERN 包裝器的記憶體佈局：
 ```
 
 `CALLBACK:` 建立一個 Windows 風格的回呼函數（POSIX 版也使用相同框架）：
-1. `EXTERN` 建立包裝器代碼
+1. `EXTERN` 建立包裝器程式碼
 2. `HEADER` 建立字頭
 3. `_WNDPROC-CODE` 是回呼入口點
 4. `,` 儲存包裝器位址
@@ -1274,7 +1274,7 @@ CREATE .rel.forth
 
 `R_386_32` 是 32 位元絕對位址重定位，計算公式為：
 
-```
+```forth
 重定位後的值 = S + A
 
 其中：
