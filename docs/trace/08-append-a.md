@@ -401,7 +401,7 @@ lea eax, [eax*4]
 
 #### 3.4.2 跨平台提醒
 
-這個 `[EAX*4]` 把 cell size 寫死成 4。如果把 SP-Forth 移植到 64-bit（cell = 8），這條 `LEA` 要改成 `LEA EAX, [EAX*8]`，或者用更通用的「先乘 CELL」版本。SP-Forth 在 IA-32 上沒有用 `CELL` 常數展開成 `*4`，而是直接 hardcode——這是 IA-32-only 假設的痕跡之一。
+這個 `[EAX*4]` 把 cell size 寫死成 4。它是 IA-32-only 假設的痕跡之一：SP-Forth 在 IA-32 上沒有把 `CELL` 常數展開成 `*4`，而是直接 hardcode。要注意的是，若真要移植到 64-bit，**不能只把 scale 改成 8**——還得重新定義 cell 寬度與整個暫存器模型；x86-64 的指標運算通常會改用 `RAX`/`RBP` 等 64-bit 暫存器，而非沿用 IA-32 的 `EAX`/`EBP`。
 
 #### 3.4.3 練習：自己推出 `2 CELLS` 的值
 
@@ -418,7 +418,7 @@ lea eax, [eax*4]
 | Forth word | 行為 | 對應指令（IA-32） |
 |------------|------|-------------------|
 | `CHARS`     | `n` 個 char 對應的 byte 數 | `EAX := EAX * 1`（SP-Forth 通常 **no-op**，因為 `1 * n = n`） |
-| `CELL+`     | 把 cell 個數加 1 | `ADD EAX, # 1` 或 `INC EAX` |
+| `CELL+`     | 把位址前進一個 cell（IA-32 上 = +4 bytes） | `LEA EAX, 4 [EAX]`（`spf_forthproc.f:388-390`） |
 | `CELLS`     | `n` 個 cell 對應的 byte 數 | `LEA EAX, [EAX*4]` |
 | `CHAR+`     | 把 byte 位址加 1 | `ADD EAX, # 1` 或 `INC EAX` |
 
@@ -628,18 +628,18 @@ END-CODE
 
 #### 4.3a `CALL` 後面為什麼可以接資料？
 
-x86 執行 `CALL target` 時，會把「CALL 後面那個位址」推入 `ESP` 指向的回返堆疊：
+x86 執行 `CALL target` 時，會把「CALL 後面那個位址」推入 `ESP` 指向的回返堆疊。但要注意 `VALUE` 的真實佈局：value cell 在**第一個** CALL 之後、**第二個** CALL 之前（`tc_spf.F:374-377`）：
 
 ```text
-執行 CALL 前：                  進入 _TOVALUE-CODE 後：
+VALUE 的執行體佈局：              進入 _TOVALUE-CODE 後：
 
-程式碼：                        ESP → return address
-CALL _TOVALUE-CODE                    │
-<embedded value cell>  ◄──────────────┘
-下一條指令
+xt+0:  CALL _CONSTANT-CODE  (5B)  ESP → return address（指向 xt+14）
+xt+5:  value cell           (4B)        │
+xt+9:  CALL _TOVALUE-CODE   (5B)        │  POP EBX 取得 xt+14
+xt+14: 下一條指令          ◄────────────┘  LEA EBX,-9[EBX] → xt+5（value cell）
 ```
 
-因此 `_TOVALUE-CODE` 一開始的 `POP EBX` 不是取一般資料堆疊，而是取出 x86 return address。這個 return address 剛好指向嵌入資料附近，所以再用 `LEA EBX, -9 [EBX]` 回推到要改寫的 cell。
+因此 `_TOVALUE-CODE` 一開始的 `POP EBX` 不是取一般資料堆疊，而是取出 `CALL _TOVALUE-CODE` 的 x86 return address（= xt+14）。`-9` 是從這個 return address 回退「5-byte CALL + 4-byte value cell」，剛好定位到前面的 value cell（xt+5）——它**回退到 value cell**，而不是讀取緊接在 CALL 後面的資料。
 
 讀到 `POP` 但前面沒有明顯 `PUSH` 時，要先懷疑：這是不是在取 `CALL` 推入的 return address？
 
@@ -1163,7 +1163,7 @@ END-CODE
 
 #### 6.3.2 跨平台提醒
 
-這個 `[EAX*4]` 把 cell size 寫死成 4。如果把 SP-Forth 移植到 64-bit（cell = 8），這條 `LEA` 要改成 `LEA EAX, [EAX*8]`，或者用更通用的「先乘 CELL」版本。SP-Forth 在 IA-32 上沒有用 `CELL` 常數展開成 `*4`，而是直接 hardcode——這是 IA-32-only 假設的痕跡之一。
+這個 `[EAX*4]` 把 cell size 寫死成 4。它是 IA-32-only 假設的痕跡之一：SP-Forth 在 IA-32 上沒有把 `CELL` 常數展開成 `*4`，而是直接 hardcode。要注意的是，若真要移植到 64-bit，**不能只把 scale 改成 8**——還得重新定義 cell 寬度與整個暫存器模型；x86-64 的指標運算通常會改用 `RAX`/`RBP` 等 64-bit 暫存器，而非沿用 IA-32 的 `EAX`/`EBP`。
 
 #### 6.3.3 練習：自己推出 `2 CELLS` 的值
 
@@ -1273,7 +1273,7 @@ RET
 | 6 | ... | 中段可能是建立新的 `EBP`、`EDI`（USER base）、初始化 local 變數的程式碼。 |
 | 7 | `CALL EBX` | 呼叫真正的 Forth 主體（由 callback 流程決定）。 |
 | 8 | ... | 收尾、把回返值整理到 `EAX`。 |
-| 9 | `XCHG EAX, [ESP]` | 把 `EAX`（Forth 回返值）和 `[ESP]`（保護中的舊 EBP）對調；下一步 `RET` 把 EBP pop 回 EBP。 |
+| 9 | `XCHG EAX, [ESP]` | EBP 已由先前的 `MOV EBP, 4 [EAX]` 還原（`posix/api.f:71`）；此處把 `EAX`（Forth 回返值）與 `[ESP]`（堆疊頂端的返回位址）對調，使回返值留在 EAX、返回位址回到堆疊頂端，接著 `RET` 只負責彈出返回位址到 EIP。`RET` 不會 pop 任何東西到 EBP。 |
 | 10 | `RET` | x86 跳回 callback 的 caller；`EAX` 是回返值。 |
 
 這個例子比前面難很多，因為它一次混了：
@@ -1304,7 +1304,7 @@ RET
 
 在 callback 內部，SP-Forth 要建立自己的 data stack（在 Windows 上就是這 3968 bytes 的保留區）。`EBP` 會被改成指向這塊新區域的某個位置。callback 結束時必須把**外層**的 `EBP` 還原，否則外部 C 程式看到 `EBP` 突然指到奇怪的位址會 crash。
 
-`PUSH EBP` 在進入時保護、`XCHG EAX, [ESP]; RET` 在退出時一邊還原 EBP、一邊把 Forth 回返值交給 caller。
+`PUSH EBP` 在進入時保護外層 EBP；退出時由 `MOV EBP, 4 [EAX]` 還原 EBP。`XCHG EAX, [ESP]; RET` 只是 wrapper 的返回位址/回傳值整理序列（把回傳值放進 EAX、返回位址放回堆疊頂端再 `RET`），它**不**負責還原 EBP。
 
 #### 6.5.3 練習：把它壓成 pseudo-Forth
 
@@ -1344,36 +1344,37 @@ callback_frame:
 | 1 | `?SET` | 編譯期 | 清掉過時的 OP / JP 緩衝區 |
 | 2 | `SetOP` | 編譯期 | 記錄「下一條機器碼的 DP 起點」 |
 | 3 | `0E8 C,` | 編譯期 | 把 `CALL rel32` 的 opcode `0xE8` 寫進 dictionary |
-| 4 | `DP @ CELL+ - ,` | 編譯期 | 計算 `addr` 相對「CALL opcode 之後 5 byte」的相對位移，emit 為 4-byte literal |
+| 4 | `DP @ CELL+ - ,` | 編譯期 | emit opcode 後 `DP @` 是 rel32 欄位起點；`CELL+` 前進到下一條指令位址（CALL 起點 + 5），以此為基準算 `addr` 的 rel32，emit 為 4-byte literal |
 | 5 | `DP @ TO LAST-HERE` | 編譯期 | 把這條 machine instruction 的結束位址記起來，給 optimizer 用 |
 
 #### 6.6.1 一個具體數字
 
-假設 `TC-CALL,` 被呼叫時：
+假設 `TC-CALL,` 被呼叫時（注意區分「CALL 起點」與「emit opcode 後的 DP」）：
 
 - `addr = 0x00403000`（某個 Forth word 的 CFA）
-- `DP` 在 `0x00401010`（剛 emit 完 `0xE8`）
-- 所以 rel32 的計算基準是 `0x00401011`（CALL opcode + 1）
+- CALL opcode（`0xE8`）位於 `0x00401010`
+- emit 完 `0xE8` 後，`DP = 0x00401011`（rel32 欄位的起點）
+- rel32 的計算基準是 `DP @ CELL+ = 0x00401011 + 4 = 0x00401015`（也就是 CALL 起點 + 5 = 下一條指令位址）
 
 emit 出來的 4-byte displacement 就是：
 
 ```text
-0x00403000 - 0x00401011 = 0x00001FEF
+0x00403000 - 0x00401015 = 0x00001FEB
 ```
 
-寫進 dictionary 後，target 執行到這條 CALL 時，CPU 算 `IP + rel32 = (0x00401011) + 0x00001FEF = 0x00403000`，正好跳到 `addr`。
+寫進 dictionary 後，target 執行到這條 CALL 時，CPU 算 `IP_next + rel32 = 0x00401015 + 0x00001FEB = 0x00403000`，正好跳到 `addr`。
 
 #### 6.6.2 為什麼 `DP @ CELL+ - ,` 不是 `DP @ - ,`？
 
-CALL 的 rel32 計算基準是 **「CALL opcode 結束的下一個 byte」**，不是「CALL 的起始位址」：
+CALL 的 rel32 計算基準是 **「CALL 指令結束、下一條指令的位址」**（CALL 起點 + 5），不是「CALL 的起始位址」，也不是「rel32 欄位起點」：
 
 ```
-[ DP ]     0xE8     \ CALL opcode，1 byte
-[ DP+1 ]   rel32    \ 4 byte，這裡的位移是以 DP+5 為基準
-[ DP+5 ]   ← 下一條指令
+[ CALL起點   ] 0xE8     \ CALL opcode，1 byte
+[ CALL起點+1 ] rel32    \ 4 byte；emit opcode 後 DP @ 指向這裡
+[ CALL起點+5 ] ← 下一條指令；這才是 rel32 的基準（= DP @ CELL+）
 ```
 
-所以是 `DP @ CELL+ - ,`（`CELL+` 把 DP 推進 1 cell / 4 bytes，然後用 `addr - DP_after_opcode` 當 rel32）。
+所以是 `DP @ CELL+ - ,`：emit opcode 後 `DP @` 是 rel32 欄位起點，`CELL+` 再前進 4 bytes 到下一條指令位址，最後 `addr - 下一條指令位址` 才是正確的 rel32。
 
 #### 6.6.3 為什麼要 `LAST-HERE`？
 
@@ -1580,7 +1581,7 @@ CODE _TOVALUE-CODE
 END-CODE
 ```
 
-這條 `LEA EBX, -9 [EBX]` 是用 `LEA` 從 return address 倒推回嵌在 code stream 裡的 value 欄位。`9` 不是魔術數字，而是這段從 `CALL` 起到 value cell 之間所有 byte 的長度。
+這條 `LEA EBX, -9 [EBX]` 是用 `LEA` 從 return address 倒推回嵌在 code stream 裡的 value 欄位。`9` 不是魔術數字：它是「5-byte `CALL _TOVALUE-CODE` ＋ 4-byte value cell」的總長度——從 `CALL _TOVALUE-CODE` 之後的 return address 回退 9 bytes，剛好落在 value cell（見 §4.3a 的佈局圖）。
 
 #### 7.3.4 怎麼快速判斷 `LEA` 在做什麼
 
