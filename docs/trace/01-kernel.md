@@ -938,6 +938,8 @@ SP-Forth 支援兩種換行模式：
 
 當來源與目標重疊、且目標起點落在來源區間內較高位址時（向高位址搬移），順向複製（CMOVE）會先覆寫到尚未讀取的來源資料。此時 `MOVE` 改用 `CMOVE>` 由高位址往低位址複製；若目標在來源之前、或沒有這種重疊，則用 `CMOVE`。`MOVE` 以比較 `addr1 < addr2 < addr1+u` 來決定方向（`spf_forthproc_hl.f:43-51`）。
 
+> **標準歸屬註記**：原始碼把 `MOVE` 標註為 `\ 94`，但嚴格按標準，`MOVE` 字是 **Forth-2012** 才加入 Core 的（ANS Forth-94 Core 只有 `CMOVE`/`CMOVE>`，且在 Forth-2012 中 `CMOVE`/`CMOVE>` 被移到 String word set）。SP-Forth 自稱 Forth-94 相容，這裡的 `MOVE` 可視為「提供 Forth-2012 風格 MOVE 的延伸」。其搬移方向語意（重疊時改用 `CMOVE>`）與標準一致。
+
 ### 5.4 NUMBER 轉換相關
 
 ```forth
