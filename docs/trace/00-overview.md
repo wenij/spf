@@ -144,6 +144,85 @@ src/
 └── win/                           ← Windows 平台實作（此處省略）
 ```
 
+### 2.1a 補充目錄：`ac-lib3/` 與 `devel/`
+
+除了 `src/`、`lib/`、`docs/` 這些主體目錄之外，repo 裡還有兩個很容易讓初次閱讀者疑惑、但其實很值得認識的補充區：`ac-lib3/` 與 `devel/`。
+
+#### `ac-lib3/`：額外函式庫與工具集合
+
+`ac-lib3/` 不是 kernel / compiler 的主程式碼，也不是 `spf.f` 建構時必載的核心目錄；更精確地說，它是一組**額外函式庫、工具與平台擴充集合**。從目錄內容來看，它主要包含：
+
+```forth
+ac-lib3/
+├── LOCALS.F / REQUIRE.F / TEMPS.F   ← 額外語言機制與載入輔助
+├── STR.F / STR2.F / STR3.F / str4.f ← 字串處理系列函式庫
+├── string/                          ← 正規表示式、大小寫轉換、MIME、pattern 等
+├── memory/                          ← 記憶體相關工具
+├── debug/TRACE.F                    ← 除錯追蹤輔助
+├── tools/                           ← 小工具與 WinAPI 相關輔助程式
+├── transl/                          ← 文法 / 詞彙處理實驗
+└── win/                             ← Windows 專用擴充（registry、ini、winsock、process、service、com、odbc 等）
+```
+
+因此，把 `ac-lib3/` 理解成「**SP-Forth 生態系的延伸函式庫區**」會比把它當成 kernel 的一部分更準確。它比較接近 reusable library / optional toolkit，而不是 `src/` 那種「建構 `spf4` 本體時必須追蹤的主路徑」。
+
+#### `devel/`：開發者工作區、歷史資源與實驗程式
+
+`devel/` 更不像單一產品模組；它是一個**開發者工作區（developer workspace）**，裡面以 `~user` 的形式分成多位貢獻者的子樹，例如：
+
+```forth
+devel/
+├── ~mak/
+├── ~yz/
+├── ~ygrek/
+├── ~micro/
+├── ~day/
+├── ~ac/
+├── ~nn/
+└── ...
+```
+
+這些子樹下混合了：
+
+- 額外 library
+- prototype / experimental code
+- samples
+- 文件與作者註記（`AUTHOR.TXT`、`index.html` 等）
+- build / conversion tools
+- 歷史遺留程式與社群貢獻
+
+換句話說，`devel/` 比較像「**社群與作者群的開發資產倉庫**」，而不是 `src/` 那種穩定、直接進入主系統建構流程的正式模組樹。
+
+#### 它們與主系統的實際關聯
+
+雖然這兩個目錄都不是 `spf.f` 主載入路徑的一部分，但它們**不是完全無關**。目前 repo 中至少可以看到幾個明確的接點：
+
+- [`src/spf_module.f:49`](file:///Users/wenij/work/forth/spf/src/spf_module.f#L49) 會把 `devel/` 拼進模組搜尋路徑；也就是說，模組載入機制會把 `devel/` 視為一個可搜尋的 library root。
+- [`src/win/res/res.bat:6`](file:///Users/wenij/work/forth/spf/src/win/res/res.bat#L6) 會呼叫 `~yz/prog/fres/fres.f`，實際上就是 repo 中的 [`devel/~yz/prog/fres/fres.f`](file:///Users/wenij/work/forth/spf/devel/~yz/prog/fres/fres.f) —— 這表示 Windows 資源檔建構流程確實依賴 `devel/` 裡的工具。
+- [`docs/trace/05-io-error-init.md`](file:///Users/wenij/work/forth/spf/docs/trace/05-io-error-init.md) 已說明 `spf_module.f` 會把 `devel/` 納入模組路徑；[`docs/trace/06-build-save.md`](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md) 也已提到 `fres.f` 來自 `devel/~yz/prog/fres/`。
+
+#### 閱讀這份 trace 文件時，應怎麼看待這兩個目錄？
+
+如果你的目的，是**追蹤 `spf4` / `spf4e` 主系統如何建構、啟動、編譯、儲存映像**，那優先順序仍然是：
+
+1. `src/`
+2. `lib/`
+3. `docs/trace/`
+
+而 `ac-lib3/` 與 `devel/` 則比較適合在以下情境再深入：
+
+- 想找額外函式庫與可重用工具
+- 想追社群歷史實作或作者個人實驗
+- 想理解某些 build helper（例如 `fres.f`）從哪來
+- 想知道模組搜尋路徑為什麼會碰到 `devel/`
+
+也就是說：
+
+- **`ac-lib3/` = 延伸函式庫與工具集**
+- **`devel/` = 開發者 / 歷史 / 實驗資源區**
+
+把這兩個目錄從一開始就和 `src/` 區分開來，能避免讀者把所有樹狀結構誤解成「主系統建構所必須追蹤的核心實作」。
+
 ### 2.2 `src/*` 主題地圖：從原始碼樹到追蹤文件
 
 專案自帶的舊版 `docs/src.ru.md`，其實已經把 `src/*` 的核心主題濃縮成幾個閱讀入口：**暫存器配置、雙堆疊模型、映像/字典、heap / USER 記憶體、詞條結構、kernel 建構、macro optimizer、`>VIRT` 位址轉換**。`doc/trace/*` 可以視為把這些主題拆開、補齊細節後的新版追蹤。
