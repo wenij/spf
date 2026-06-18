@@ -289,6 +289,544 @@ ac-lib3/
 
 ---
 
+## 4.6 主要 library 細部索引（逐項說明 + example）
+
+這一節把前面提到的主要 library / family 再往下展開：**每個先說它是做什麼，再給至少兩個實際會遇到的例子**。若你是第一次真正打算「拿 `ac-lib3/` 來做事」，這一節會比前面的目錄圖更實用。
+
+### `LOCALS.F`
+
+**它是做什麼的？**  
+提供 SPF 裡的 locals 語法擴充，讓你可以在 colon definition 一開始宣告具名局部變數，減少大量 `SWAP` / `OVER` / `ROT` 導致的可讀性下降。
+
+**你通常會在什麼情況用它？**
+
+1. 你有一段數值或字串處理邏輯，堆疊 juggling 已經多到自己都難追。  
+2. 你在維護舊 SPF 應用，想把 stack-heavy 的 code 改寫得比較像可維護的程式。  
+3. 你在讀 `ac-lib3/` 其它比較新的檔案（例如 `registry2.f`、`STR2.F`），常會先看到 `REQUIRE { ~ac/lib/locals.f`。
+
+**例子**：
+
+- 把 `: FOO ( a b c -- ) OVER + SWAP ... ;` 改寫成使用具名區域變數的版本，讓資料流更明確。
+- 在 `DO ... LOOP` 或 callback 邏輯中保留一些中間值，不必反覆從堆疊重新排列。
+- 讀到 `{: ... :}` / `{ a b \ c -- }` 這類寫法時，用 `LOCALS.F` 對照其語意。
+
+### `TEMPS.F`
+
+**它是做什麼的？**  
+`TEMPS.F` 是較舊的一代 temp / locals 方案，提供 `| ... |`、`(( ... ))`、`|| ... ||` 等語法，讓你能建立短期暫存值與類 VALUE 風格的臨時變數。
+
+**你通常會在什麼情況用它？**
+
+1. 你在讀較舊的 `ac-lib3/` 程式（例如 `STR.F`、`REGISTRY.F`、部分 `window/` 模組），發現它們不是用 `LOCALS.F`。  
+2. 你想理解 SPF 生態從舊 temp 機制過渡到較新 locals 機制的歷史軌跡。  
+3. 你只想放幾個短暫中間值，不想引入完整 locals 風格。
+
+**例子**：
+
+- 在較舊檔案裡看到 `|| h ||` 或 `(( a b ))` 時，用 `TEMPS.F` 理解它在做什麼。
+- 維護 `STR.F` 這類依賴 `TEMPS.F` 的舊版模板字串實作。
+- 比較 `TEMPS.F` 與 `LOCALS.F` 的寫法差異，決定舊專案要不要遷移。
+
+### `REQUIRE.F`
+
+**它是做什麼的？**  
+提供 `REQUIRE` / `REQUIRED` 風格的載入機制：避免重複載入、組合 library path，並依序嘗試 local path / 預設 library path / web path。
+
+**你通常會在什麼情況用它？**
+
+1. 想知道 `~ac/lib/...` 這套 require 慣例是怎麼運作的。  
+2. 想理解 SPF 生態早期如何管理「按需載入」的外部函式庫。  
+3. 想追某個 `ac-lib3/` 檔案的依賴鏈，通常會先從它的 `REQUIRE` 列表開始。
+
+**例子**：
+
+- 讀到 `REQUIRE COMPARE-U ~ac/lib/string/compare-u.f` 時，知道這不只是 include，而是帶有去重與路徑處理的載入。
+- 想手動在 SPF project 中導入某個 `ac-lib3` 模組，會先學 `REQUIRE` 的用法。
+- 想理解為什麼 `WebLibPath` 這類設計存在（雖然目前 web branch 未實作）。
+
+### `STR.F` / `STR2.F` / `STR3.F` / `str4.f`
+
+**它們是做什麼的？**  
+這是一整個「動態字串 / 模板字串」家族：目標是提供接近 Perl / PHP 風格的 `"...{expr}..."` 字串內插能力。它們不是四個獨立功能庫，而是同一主題的演進版本。
+
+**你通常會在什麼情況用它們？**
+
+1. 想產生 HTTP / SMTP / CGI / mail 這類大量文字輸出的應用。  
+2. 想把某個 word 的輸出直接嵌進模板，而不是手工 `TYPE` / `HOLD`。  
+3. 想比較 SPF 生態裡 `TEMPS` 與 `LOCALS` 風格在同一問題上的寫法差異。
+
+**例子**：
+
+- 組一個帶變數內插的 HTTP response body。
+- 建一段包含 `{CRLF}`、`{word}`、`{FILE ...}` 的 mail / CGI 模板。
+- 想選擇版本時：舊碼偏 `STR.F`，較新風格偏 `STR2.F` / `STR3.F` / `str4.f`。
+
+### `string/CONV.F`
+
+**它是做什麼的？**  
+提供一大包通用字串/編碼轉換工具：base64、KOI8-R ↔ Windows-1251、URL `%xx` 轉換、把 query-string / token stream 轉成 blank-delimited 形式等。
+
+**你通常會在什麼情況用它？**
+
+1. 郵件、HTTP、URL 參數、俄文字元編碼處理。  
+2. 想把非空白分隔的輸入改造成 parser 易讀的形式。  
+3. 想做 base64 encode/decode，而不想自己重寫。
+
+**例子**：
+
+- 把一段 base64 資料 decode 回 addr/u。
+- 把 URL query string 中的 `%20` / `%3A` 還原。
+- 把 KOI8-R 文本轉成 Windows-1251，以便和 Windows API 或舊資料互通。
+
+### `string/get_params.f`
+
+**它是做什麼的？**  
+專做 `name=value&x=y` 這類 query-string / form parameter 的解析與查詢。
+
+**你通常會在什麼情況用它？**
+
+1. CGI / HTTP form 參數處理。  
+2. 想從一串 URL-style 參數快速查出特定 key。  
+3. 想 dump / iterate 整個參數集合。
+
+**例子**：
+
+- 解析 `error_code=10060&from=http://10.1.1.11/`，再用 `GetParam` 取特定欄位。
+- 先 `GetParamsFromString`，後續用 `IsSet` 判斷某個參數有沒有帶。
+- 用 `DumpParams` 快速看整串參數 parse 結果。
+
+### `string/mime-decode.f`
+
+**它是做什麼的？**  
+處理 MIME / mail header 的 encoded text（RFC 2045 / 2047 / 2231），尤其適合郵件與 HTTP 文字內容解碼。
+
+**你通常會在什麼情況用它？**
+
+1. 郵件標頭出現 `=?charset?...?=` 形式的編碼字串。  
+2. 想處理 quoted-printable / base64 兩種常見 mail encoding。  
+3. 想把 KOI8-R / Windows-1251 等俄文相關 charset 正常還原。
+
+**例子**：
+
+- 解 `Subject: =?windows-1251?B?...?=` 類型的 mail 標頭。
+- 把 folded header（跨行 header）先 `StripLwsp` 再 decode。
+- 在郵件 parser 裡把 charset decoder 掛進 `CHARSET-DECODERS` 詞彙表。
+
+### `string/regexp.f`
+
+**它是做什麼的？**  
+這是 PCRE wrapper，提供 Perl 風格正規表示式能力，是 `ac-lib3/string/` 裡最強大的 pattern matching 工具之一。
+
+**你通常會在什麼情況用它？**
+
+1. 想抓取字串中的結構化片段。  
+2. 想一次取出多個 capture groups。  
+3. 想在 SPF 中直接用現代 regexp，而不是自己手寫 parser。
+
+**例子**：
+
+- 用 `PcreMatch` 做簡單 yes/no 模式比對。
+- 用 `PcreGetMatch` 把 `(\S+)\s+(\S+)` 這類 capture group 全部拉出來。
+- 在 mail / CGI / config parser 前先用 regexp 過濾格式。
+
+### `string/bregexp/bregexp.f`
+
+**它是做什麼的？**  
+另一套 regexp 路線，依賴同目錄附帶的 `BREGEXP.DLL`。與 `regexp.f`（PCRE）相比，它更像是另一個外部 regex engine 的 binding。
+
+**你通常會在什麼情況用它？**
+
+1. 已經有 `BREGEXP.DLL` 環境，想直接重用。  
+2. 想比較 PCRE 與另一套 regexp engine 的用法或效能。  
+3. 在維護歷史專案時發現它原本就依賴 BRegexp。
+
+**例子**：
+
+- 用 `BregexpMatch` 做快速比對。
+- 用 `BregexpGetMatch` 取 match 結果。
+- 在 Windows-only 環境下，維護依賴 `BREGEXP.DLL` 的舊工具。
+
+### `debug/TRACE.F`
+
+**它是做什麼的？**  
+一個非常小、但很有 SPF 特色的 debug helper：透過重新定義 `:`，讓每個新定義的 word 在執行時自動印出自己的名字。
+
+**你通常會在什麼情況用它？**
+
+1. 想在 legacy code 裡快速加 trace，而不重寫一堆 logging。  
+2. 想觀察某段程式實際執行到了哪些 word。  
+3. 想學 SPF 如何攔截 `:` 來做 trace。
+
+**例子**：
+
+- `DebugOn` 後，跑某段程式，觀察 word 呼叫序列。
+- 維護舊服務程式時，快速知道它卡在哪個 word。
+- 當成最小可讀的 trace 實作範例。
+
+### `tools/load_lib.f`
+
+**它是做什麼的？**  
+動態載入 DLL，並走 `WINAPLINK` 把已宣告的 `WINAPI:` 名稱一次 resolve / 回填。
+
+**你通常會在什麼情況用它？**
+
+1. plugin DLL 在執行時才決定路徑。  
+2. 想一次性把某個 DLL 裡已宣告的 API 都綁好。  
+3. 想理解 `WINAPLINK` 這套 lazy API binding 怎麼接起來。
+
+**例子**：
+
+- 啟動時才決定載哪個版本的 DLL。
+- 手動載入一個客製 DLL，然後重綁一批 `WINAPI:` 宣告。
+- 在工具程式中做簡單 plugin loader。
+
+### `tools/dump_winapi.f`
+
+**它是做什麼的？**  
+把 `WINAPLINK` 鏈上的 WinAPI 宣告 dump 出來，方便除錯與 introspection。
+
+**你通常會在什麼情況用它？**
+
+1. 想知道目前有哪些 `WINAPI:` 宣告已經存在。  
+2. 想除錯 DLL/函式名稱綁定是否正確。  
+3. 想快速看某個模組到底依賴哪些 WinAPI。
+
+**例子**：
+
+- 在載完模組後執行 `DUMP-WINAPI` 檢查綁定清單。
+- 調查某個 `GetProcAddress` 失敗是不是因為名字拼錯。
+
+### `tools/jmp.f`
+
+**它是做什麼的？**  
+直接在機器碼層 patch 一條 `0xE9 rel32` 跳轉。這是很低階、很 SPF 的工具。
+
+**你通常會在什麼情況用它？**
+
+1. 想 hot-patch 一個既有 word 到另一個位址。  
+2. 想做 compiler instrumentation / interception。  
+3. 想學 SPF 怎麼在 runtime 改 code stream。
+
+**例子**：
+
+- 把某個既有 primitive 改跳到測試版實作。
+- 作為 `tools/map.f` 的底層基礎，攔截 `COMPILE,` / `LIT,`。
+
+### `tools/map.f`
+
+**它是做什麼的？**  
+這是編譯器插樁工具：透過 `jmp.f` 改寫 `COMPILE,` 和 `LIT,`，讓編譯時把 reference map 印出來。
+
+**你通常會在什麼情況用它？**
+
+1. 想看大型專案裡誰編譯了誰。  
+2. 想 debug 交叉參照或 dependency map。  
+3. 想學 SPF 的 hot-patch compiler 技巧。
+
+**例子**：
+
+- 產生簡易 call/reference map。
+- 找出某個 word 為什麼會被編進映像。
+- 研究 compiler hook 的實作技巧。
+
+### `list/STR_LIST.F`
+
+**它是做什麼的？**  
+提供 xcount 字串清單與單向鏈結串列的基本操作。
+
+**你通常會在什麼情況用它？**
+
+1. 想維護一串字串集合。  
+2. 想做 membership test (`inList`)。  
+3. 想找最小但實用的資料結構範例。
+
+**例子**：
+
+- 建一個字串黑名單 / 白名單。
+- 把 parse 出來的字串值逐一 `AddNode` 存起來。
+
+### `transl/vocab.f`
+
+**它是做什麼的？**  
+提供 `InVoc{ ... }PrevVoc`、`Public{ ... }Public` 這類語法糖，讓 vocabulary / public API 的定義比較不囉唆。
+
+**你通常會在什麼情況用它？**
+
+1. 想把一批 word 收進某個 vocabulary。  
+2. 想宣告 public API，而不手刻 `ALSO DEFINITIONS PREVIOUS`。  
+3. 想看 SPF 如何把詞彙表操作包成 block syntax。
+
+**例子**：
+
+- 寫模組型 library 時，把內部字與公開字分開。
+- 讀 `mbox/text_mbox_parsing.f` 時理解它怎麼建立自己的 vocabulary。
+
+### `transl/BNF.F`
+
+**它是做什麼的？**  
+提供一套 BNF / parser scaffolding，用來寫小型語法解析器。
+
+**你通常會在什麼情況用它？**
+
+1. 想 parse 某種協定語法。  
+2. 想寫設定檔 / mini-language parser。  
+3. 想看 SPF 世界裡「文法導向 parser」怎麼搭。
+
+**例子**：
+
+- 寫自訂 DSL parser。
+- 寫 protocol header parser。
+- 研究 `Look` / `Match` / `Expected` 這種 parser 基本骨架。
+
+### `ruvim/MASK.F`
+
+**它是做什麼的？**  
+提供 wildcard mask matching（`*` / `?` / 跳脫字元），偏向 glob 類比對。
+
+**你通常會在什麼情況用它？**
+
+1. 想做簡單檔名 / 模式匹配，而不需要完整 regexp。  
+2. 想做大小寫不敏感的 wildcard compare。  
+3. 想要比 regexp 更輕量的 match 工具。
+
+**例子**：
+
+- 比對 `*.txt` / `mail-??.log` 類檔名樣式。
+- 在規則系統裡做 pattern filter。
+
+### `res_ctrl.f`
+
+**它是做什麼的？**  
+這是一個 thread-aware resource table，用來追蹤資源（尤其 file handle）。很明顯帶有 Eserv2 風格。
+
+**你通常會在什麼情況用它？**
+
+1. 想抓 file handle leak。  
+2. 想學多執行緒資源表怎麼做。  
+3. 想研究 SPF 裡 vector + mutex 的組合方式。
+
+**例子**：
+
+- 攔截 `OPEN-FILE` / `CLOSE-FILE`，看誰沒關檔。
+- 在 server 型程式裡追蹤每個 thread 持有的資源。
+
+### `memory/heap_enum.f` / `heap_enum2.f` / `less_mem.f`
+
+**它們是做什麼的？**  
+前兩者用來列舉 heap，後者用來收縮 process working set。偏 Win32 記憶體觀察/調整工具。
+
+**你通常會在什麼情況用它們？**
+
+1. 想看目前 process 的 heap 狀態。  
+2. 想調查字串 buffer / heap allocation 流失。  
+3. 想在長時間 idle 的程式裡要求 OS 回收 working set。
+
+**例子**：
+
+- 用 `heap_enum2.f` 配合 `str4.f` 找遺失的 STRBUF。
+- 在 WinNT 上跑 `ReduceMem`，把 working set 壓下來。
+
+### `win/registry2.f` / `REGISTRY.F`
+
+**它們是做什麼的？**  
+都是 Windows registry 操作庫。`REGISTRY.F` 是舊版（TEMPS 風格），`registry2.f` 是改寫成 `LOCALS.F` 風格的較新版。
+
+**你通常會在什麼情況用它們？**
+
+1. 想讀/寫 registry key/value。  
+2. 想列舉某個 key 下的所有 subkeys / values。  
+3. 想看 SPF 如何包 `RegOpenKeyA` / `RegQueryValueExA` 這一類 API。
+
+**例子**：
+
+- 讀某個設定值：`StrValue` / `NumValue` / `BinValue`
+- 列舉 key/value：`RG_ForEachKey` / `RG_ForEachValue`
+- 維護舊程式時，若看到 TEMPS 風格就看 `REGISTRY.F`；新程式優先看 `registry2.f`
+
+### `win/ini.f`
+
+**它是做什麼的？**  
+INI 檔操作封裝，還提供 `File.Section[Key]` 類型的方便語法。
+
+**你通常會在什麼情況用它？**
+
+1. 應用程式配置存在 INI 檔。  
+2. 想做 default / fallback ini 查詢。  
+3. 想要比直接 `GetPrivateProfileStringA` 更好用的包裝。
+
+**例子**：
+
+- 讀 `Mail[CMCDLLNAME32]` 類設定值。
+- 做兩份 ini（正式 / 原始）之間的 fallback 查詢。
+
+### `win/file/`
+
+**它是做什麼的？**  
+補 Win32 檔案系統相關能力：find file、遞迴列舉、file time、share-delete、FILE* stream 包裝。
+
+**你通常會在什麼情況用它？**
+
+1. 想遞迴掃目錄。  
+2. 想讀檔案時間戳。  
+3. 想在檔案開啟時仍允許 delete/share。  
+4. 想橋接到 C runtime stream。
+
+**例子**：
+
+- 找出某目錄下所有符合 pattern 的檔案。
+- 做 recursive file scan (`findfile-r.f`)。
+- 需要 `FILE_SHARE_DELETE` 的 Windows 特殊開檔模式。
+
+### `win/process/`
+
+**它是做什麼的？**  
+封裝 process 啟動、等待、列舉、kill、pipe、child I/O 等功能。
+
+**你通常會在什麼情況用它？**
+
+1. 想在 SPF 裡啟動外部程式。  
+2. 想抓 child process 的 stdin/stdout。  
+3. 想列舉或結束現有 process。  
+4. 想處理 console control handler / shutdown。
+
+**例子**：
+
+- `StartApp` / `StartAppWait` 啟動外部工具。
+- `ChildApp` 做 parent-child 的 pipe 溝通。
+- `enumproc.f` / `kill.f` 做簡單 process 管理工具。
+
+### `win/service/`
+
+**它是做什麼的？**  
+提供 Windows service 相關結構與操作；還保留 `service95.f` 這類 Win9x 時代的替代方案。
+
+**你通常會在什麼情況用它？**
+
+1. 想把 SPF 應用包成 Windows service。  
+2. 想建立 / 刪除 / 控制 service。  
+3. 想研究 SPF 裡 service skeleton 的寫法。
+
+**例子**：
+
+- 寫一個背景常駐服務。
+- 安裝、啟動、刪除 service。
+- 維護極舊系統時看 `service95.f` 如何在 Win9x 模擬 service。
+
+### `win/com/`
+
+**它是做什麼的？**  
+這是 `ac-lib3/` 最龐大、也最具「應用能力展示」意味的區塊之一：
+
+- `COM.F` 提供 COM / OLE / BSTR / Unicode 基礎封裝
+- `com_server.f` / `com_server2.f` 提供 `Class:` / `METHOD` 風格的 COM server framework
+- `samples/` 內有大量 ADO / CDO / Outlook / IE / XML / ActiveX / .NET 互通示例
+
+**你通常會在什麼情況用它？**
+
+1. 想從 SPF 呼叫 COM / ActiveX / OLE automation。  
+2. 想研究 SPF 如何自己實作 COM class / vtable。  
+3. 想找真實的 Outlook / ADO / IE automation 範例。  
+4. 想知道 SPF 生態能做到多深的 Windows automation。
+
+**例子**：
+
+- 用 ADO / OLE DB 連資料庫。
+- 用 Outlook / IE / Messenger / XML automation 跟 Windows application 互動。
+- 研究 `com_server2.f` 的 `SPF.Application` worked example。
+
+### `win/window/`
+
+**它是做什麼的？**  
+這是一整套 Win32 GUI 工具箱：window、dialog、listbox、icon、tray、popup menu、window enumeration 等。
+
+**你通常會在什麼情況用它？**
+
+1. 想在 SPF 裡做 Win32 GUI。  
+2. 想做 dialog / listbox / popup menu / tray icon。  
+3. 想研究 `WNDPROC:` + `DialogBoxIndirectParamA` 這類 GUI glue code。  
+4. 想直接在 Forth 裡動態建立 dialog template。
+
+**例子**：
+
+- 做一個簡單視窗或 modal dialog。
+- 做 tray icon / popup menu 小工具。
+- 用 `enumwindows.f` 類工具列舉 top-level windows。
+
+### `win/winsock/`
+
+**它是做什麼的？**  
+提供從 raw socket API 到高階 line-based / UDP / DNS / IP helper 的完整 Winsock 工具鏈；而 `ws2/` 反映舊 `WSOCK32.DLL` 與較新版 `WS2_32.DLL` 的並行版本。
+
+**你通常會在什麼情況用它？**
+
+1. 想做 TCP / UDP client/server。  
+2. 想做 DNS 查詢。  
+3. 想拿到本機所有 IP。  
+4. 想做 line-buffered socket I/O。  
+5. 想看 SPF 生態怎麼包網路 API。
+
+**例子**：
+
+- `PSOCKET.F` 提供類 PHP 的 `fsockopen / fgets / fputs` 介面。
+- `server_udp.f` / `listen_udp.f` 用於 UDP server。
+- `dns_q.f` 可直接做 MX / domain 驗證。
+- `foreach_ip.f` 可列出本機與外部 IP。
+
+### `win/access/`
+
+**它是做什麼的？**  
+提供 Windows 帳號、SID、ACL、privilege、LSA logon、群組列舉等安全相關工具。
+
+**你通常會在什麼情況用它？**
+
+1. 想知道目前執行者是誰。  
+2. 想調整 process ACL 或 token privilege。  
+3. 想做 impersonation / logon。  
+4. 想列舉群組與使用者。
+
+**例子**：
+
+- `whoami.f`：快速查目前 user。
+- `NT_LOGON.F`：做 user logon / impersonation。
+- `nt_access.f` / `nt_privelege.f`：調安全設定。
+
+### `win/odbc/`
+
+**它是做什麼的？**  
+ODBC / SQL 封裝，從基本 ODBC 連線一路到資料來源列舉與 XML 輸出。
+
+**你通常會在什麼情況用它？**
+
+1. 想從 SPF 直接連 ODBC 資料來源。  
+2. 想列出資料來源或 tables。  
+3. 想把查詢結果轉成 XML。  
+4. 想維護舊 TEMPS 風格的 ODBC 代碼。
+
+**例子**：
+
+- 用 `ODBC.F` 建立基本 DB query flow。
+- 用 `odbc2.f` 做 DSN / driver connect 工具。
+- 用 `xmldb.f` 把 SQL query 結果直接吐成 XML。
+
+### `win/arc/gzip/zlib.f`
+
+**它是做什麼的？**  
+封裝 `zlib.dll`，提供壓縮、解壓、CRC32 與 gzip 輸出。
+
+**你通常會在什麼情況用它？**
+
+1. 想壓縮資料或做 gzip 輸出。  
+2. 想算 CRC32。  
+3. 想把 SPF 的輸出接到 gzip writer。
+
+**例子**：
+
+- 用 `zlib_compress` / `zlib_uncompress` 對資料做壓縮與解壓。
+- 用 `gzip_write` 把資料流直接輸出成 gzip 格式。
+- 對內容做 `CRC32` 校驗。 
+
+---
+
 ## 5. 幾個具體的「遇到什麼問題就先看哪裡」
 
 下面是最實用的讀法，不是按目錄，而是按需求：
