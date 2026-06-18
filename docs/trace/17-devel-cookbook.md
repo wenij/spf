@@ -757,7 +757,107 @@ A&amp;B &lt;tag&gt; &quot;quoted&quot;<br />
 
 ---
 
-## 6. 讀完後回到哪裡？
+## 6. 延伸函式庫使用對照：`lib/` vs `ac-lib3/` vs `devel/`
+
+`SP-Forth` 的延伸函式庫分散在三個位置：`lib/`、`ac-lib3/`、`devel/`。這節提供「我看到某個需求時，要先翻哪個資料夾」的決策對照，補齊 [18-lib.md](18-lib.md)、[16-ac-lib3.md](16-ac-lib3.md) 與 [17-devel.md](17-devel.md) 三章的橫向入口。
+
+### 6.1 三者定位一覽
+
+| 面向 | `lib/` | `ac-lib3/` | `devel/` |
+|------|--------|------------|----------|
+| 角色 | 核心補齊層 | 歷史 / 大型延伸庫 | 作者工作區與歷史原型 |
+| 收錄方式 | `spf4e` 預設載入 | 手動 `INCLUDE` | 視需要載入 |
+| 命名風格 | 統一（`lib/include/`、`lib/ext/`） | 多元（`~ac`、`~pinka` 風格並存） | 各作者獨立風格 |
+| 依賴 | `REQUIRE` 鏈，無外部 | 常用 `~ac/lib/...` 路徑 | 作者自己的子樹依賴 |
+| 維護狀態 | 與 `spf4e` 同進退 | 整理過但偏歷史 | 不定期更新，無保證 |
+| 直接用於專案 | ✅ | ✅（注意依賴） | ⚠️ 需先讀懂 |
+| 學習 SPF 設計 | 中 | 中-高 | 高 |
+| 完整章節 | [18-lib.md](18-lib.md) | [16-ac-lib3.md](16-ac-lib3.md) | [17-devel.md](17-devel.md) |
+
+### 6.2 載入策略對照
+
+| 場景 | 選哪邊 | 怎麼載 |
+|------|--------|--------|
+| 商業 / 工具 / 想一次補齊 | `lib/` | `spf4e` 啟動即用；或在 `spf4` 上 `S" lib/ext/spf4e.f" INCLUDED` |
+| 模板字串、REGISTRY、BSTR、COM | `ac-lib3/` | `S" ac-lib3/STR2.F" INCLUDED` 之類 |
+| 大量字串 / 編碼 / regex / MIME | `ac-lib3/string/` | `S" ac-lib3/string/CONV.F" INCLUDED` |
+| Windows GUI / COM / ODBC / Winsock | `ac-lib3/win/` | 看 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md) §5 |
+| 找另一位作者的特定實驗 | `devel/` | `S" devel/~ygrek/lib/bit.f" INCLUDED`；可能要先解析作者路徑 |
+| 研究 SPF 4 parser 草稿 | `devel/~ac/rationale/` | 直接讀；不一定可載入 |
+
+### 6.3 需求決策矩陣
+
+下面用 `lib/` / `ac-lib3/` / `devel/` 三欄表示「這需求在哪個來源已有現成 library」。空欄表示該來源沒有對應的標準解。
+
+| 需求 | `lib/` | `ac-lib3/` | `devel/` |
+|------|:------:|:----------:|:--------:|
+| 字串模板插值 |  | ✅ `STR2.F` |  |
+| 動態字串（manual lifetime） |  | ✅ `STR2.F` / `str4.f` |  |
+| 大小寫不敏感搜尋 | ✅ `caseins.f` |  |  |
+| 反組譯 `SEE` | ✅ `disasm.f` |  |  |
+| 結構定義（field offset） | ✅ `struct.f` |  |  |
+| 詞彙表 / dictionary 操作 | ✅ `vocs.f` |  |  |
+| quotation `[: ... ;]` | ✅ `quotations.f` |  |  |
+| locals `{ ... }` | ✅ `lib/ext/locals.f` | ✅ `LOCALS.F` |  |
+| `CASE` / `OF` / `ENDOF` | ✅ `control-case.f` |  |  |
+| 浮點數 | ✅ `float2.f` |  |  |
+| 分數運算 |  |  | ✅ `~nn/lib/fraction.f` |
+| 鏈結串列 |  | ✅ `list/STR_LIST.F` | ✅ `~nn/lib/list.f` / `~pinka/lib/list.f` |
+| bitset / 位元陣列 |  |  | ✅ `~ygrek/lib/bit.f` |
+| base64 / URL encode |  | ✅ `string/CONV.F` | ✅ `~nn/lib/base64.f` |
+| regex (PCRE) |  | ✅ `string/regexp.f` |  |
+| Windows registry |  | ✅ `win/registry2.f` |  |
+| Windows INI |  | ✅ `win/ini.f` |  |
+| Windows service |  | ✅ `win/service/` |  |
+| Windows COM / OLE |  | ✅ `win/com/` |  |
+| Winsock / DNS |  | ✅ `win/winsock/` |  |
+| ODBC / SQL |  | ✅ `win/odbc/` |  |
+| Mutex / 同步 | ✅ `lib/win/mutex.f` | ✅ `win/process/` |  |
+| heap 列舉 / 除錯 |  | ✅ `memory/heap_enum.f` | ✅ `~pinka/spf/exc-dump.f` |
+| trace / hot patch |  | ✅ `debug/TRACE.F`、`tools/jmp.f` |  |
+| XML/HTML escape |  |  | ✅ `~ygrek/lib/xmlsafe.f` |
+| FSM DSL |  |  | ✅ `~ygrek/lib/fsm.f` |
+| ENUM 批次常數 |  |  | ✅ `~ygrek/lib/enum.f` |
+| OOP / framework |  |  | ✅ `~day/joop/`、`~day/wfl/` |
+| 完整應用範例 |  |  | ✅ `~micro/SHEDULER` 等 |
+
+### 6.4 混用時的注意事項
+
+1. **命名衝突**：`lib/ext/locals.f` 用 `{ ... }`，`ac-lib3/LOCALS.F` 也用 `{ ... }`；兩者 frame 模型不同，**不要在同一 session 同時 include**。一般選一個貫穿整個專案。
+2. **frame 模型不相容**：`lib/include/quotations.f` 的 `[: ... ;]` 與 `lib/ext/locals.f` 的 `{ ... }` 底層 frame 衝突；混用時編譯失敗或行為未定義。
+3. **作者路徑解析**：`ac-lib3/STR2.F` 等檔案會用 `REQUIRE xxx ~ac/lib/...` 載入依賴；你的 SPF 環境必須能解析 `~ac/lib` 對應到 `devel/~ac/lib/`，或自己改成實體路徑。
+4. **重複 include**：`REQUIRE` 機制會避免重複，但跨三個來源（`lib/`、`ac-lib3/`、`devel/`）有時會出現「同個 word 兩邊各定義一次」的情況，先 include 哪邊決定後續是哪個。
+5. **spf4 vs spf4e**：`lib/` 主要設計給 `spf4e`；在純 `spf4` 環境下用 `lib/ext/caseins.f` 之類檔案不會出問題，但 `lib/include/ansi.f` 預設依賴 `spf4e` 才有的 `WINAPI:` 之類偵測。
+6. **文件語言**：三個來源都沒有統一 doc，`devel/` 部分檔頭的註解偏俄文（與英文混雜）；trace 這幾章是目前最新的中文入口。
+7. **build 路徑**：要把 `ac-lib3/` 的東西包進 standalone executable，記得 source basepath 能被解析（見 [15-standalone-cookbook.md](15-standalone-cookbook.md) §5）。
+
+### 6.5 推薦閱讀順序
+
+1. **第一次接觸**：先讀 [18-lib.md](18-lib.md) §1-§3 與 §10，理解 `spf4e` 自帶什麼。
+2. **寫應用**：缺什麼時優先在 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md) 找對應 entry（registry、socket、COM、ODBC 等）；找不到再回頭看 [18-lib.md](18-lib.md) §5-§7 找 `lib/ext/` 或 `lib/posix/`、`lib/win/` 的替代方案。
+3. **研究底層 / 找靈感**：看本章 §3-§4 找作者子樹的代表 library 範例；想了解設計背景時看 [17-devel.md](17-devel.md) §1-§4。
+4. **碰到 bug**：先看本章 §1「使用前先確認的事」對應的 `~pinka/spf/debug-throw.f`、`exc-dump.f` 與 `ac-lib3/debug/TRACE.F` 提供的 trace 工具。
+
+### 6.6 怎麼判斷「這段程式碼應該放哪裡」
+
+寫自己的專案時，把新工具放哪裡也是個選擇：
+
+| 特性 | 放 `lib/ext/` 旁 | 放 `ac-lib3/` | 放 `devel/~xxx/` |
+|------|:----------------:|:--------------:|:----------------:|
+| 進核心 spf4e 發布 | ✅ |  |  |
+| 給多個 ac-lib3 模組用 |  | ✅ |  |
+| 個人實驗 / prototype |  |  | ✅ |
+| 需要長期 maintain 與文件 | 高 | 中 | 低 |
+
+實務建議：
+
+- 想貢獻回主倉庫：先放 `ac-lib3/`，證明穩定後再提議合併入 `lib/`。
+- 個人或公司內部工具：放自己的 `devel/~myhandle/`，不要污染主倉庫。
+- 只是要 spf4e 多載一兩個 word：寫在自己的 `myapp.f` 裡，`S" myapp.f" INCLUDED` 後 `SAVE` 即可（見 [15-standalone-cookbook.md](15-standalone-cookbook.md)）。
+
+---
+
+## 7. 讀完後回到哪裡？
 
 - 想理解 `devel/` 的定位與整體地圖，回 [17-devel.md](17-devel.md)。
 - 想看整理過、比較可直接使用的延伸函式庫，讀 [16-ac-lib3.md](16-ac-lib3.md) 與 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md)。
