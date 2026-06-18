@@ -125,6 +125,20 @@ devel/~ac/
 - 想對照 `ac-lib3/STR2.F` 與 `devel/~ac/lib/STR2.F` 的演進差異。
 - 想看 `rationale/spf4_parser.f`、`spf4_eval.f` 這類檔案，理解 parser / translator 的歷史思路。
 
+**代表內容**：
+
+- `devel/~ac/lib/LOCALS.F`、`REQUIRE.F`、`STR*.F`、`TEMPS.F`
+- `devel/~ac/lib/string/`、`win/`、`memory/`、`debug/`、`tools/`
+- `devel/~ac/rationale/SPF4.F`
+- `devel/~ac/rationale/spf4_parser.f`
+- `devel/~ac/rationale/spf4_eval.f`
+
+**實際例子**：
+
+1. 如果你在 `ac-lib3/` 看到某個 library 想知道「它是不是從作者工作版整理出來的」，就先回頭找 `devel/~ac/lib/` 的同名檔案。  
+2. 如果你想理解 SPF 4 的 parser / translator 設計背景，`devel/~ac/rationale/` 是看原作者草稿的第一站。  
+3. 如果你想比較 `ac-lib3/` 的整理版與作者工作版在命名、結構或依賴上的差異，`~ac` 幾乎是最直接的對照來源。
+
 ### 4.2 `devel/~pinka/` — SPF 核心補強與實驗深水區
 
 這是整個 `devel/` 裡最大的子樹，而且內容明顯貼近 SPF 核心本體：
@@ -157,6 +171,23 @@ devel/~ac/
 - 如果你在主系統裡追 `THROW` / exception dump，`debug-throw.f`、`exc-dump.f` 這些檔案很值得翻。
 - 如果你想找 compiler / wordlist 行為的額外 patch，`spf/compiler/` 與 `wid-extra*.f` 很可能有現成思路。
 
+**代表內容**：
+
+- `devel/~pinka/spf/debug-throw.f`
+- `devel/~pinka/spf/exc-dump.f`
+- `devel/~pinka/spf/fix-accept.f`
+- `devel/~pinka/spf/fix-refill.f`
+- `devel/~pinka/spf/quoted-word.f`
+- `devel/~pinka/spf/storage*.f`
+- `devel/~pinka/spf/ffi/`
+- `devel/~pinka/spf/compiler/`
+
+**實際例子**：
+
+1. 你若想追 SPF 例外處理 / dump 的替代做法，可以直接從 `debug-throw.f` 與 `exc-dump.f` 下手。  
+2. 你若在主系統裡看到 `fix-accept`、`fix-refill` 類問題，`~pinka/spf/` 很可能已經有對應 patch prototype。  
+3. 若你對 SPF 的 compiler / wordlist 深水區有興趣，`~pinka/spf/compiler/` 比一般 library 更接近「核心實驗場」。 
+
 ### 4.3 `devel/~yz/` — 實用工具與 Windows build helper
 
 這一棵最醒目的原因不是檔案數，而是它和**實際 build 流程有已知接點**：
@@ -174,6 +205,20 @@ devel/~ac/
 
 - 研究 Windows 資源檔 `spf.res → spf.FRES` 的轉換工具，就去看 `devel/~yz/prog/fres/`。
 - 想找另一套 Win32 helper library / automation 工具，可以先翻 `devel/~yz/lib/` 與 `prog/`。
+
+**代表內容**：
+
+- `devel/~yz/prog/fres/fres.f`
+- `devel/~yz/lib/resources.f`
+- `devel/~yz/lib/UUID.F`
+- `devel/~yz/lib/winlib.f`
+- `devel/~yz/lib/automation.f`
+
+**實際例子**：
+
+1. 若你在 build 流程中追 `fres.f` 的來源，就直接看 `devel/~yz/prog/fres/fres.f`；這不是純歷史檔，而是目前 repo 的 Windows 資源建構流程還會碰到的實際工具。  
+2. 若你想找另一套 Win32 / automation / resources helper，可先翻 `devel/~yz/lib/`。  
+3. 若你想理解 SPF 社群如何做 database / automation / winlib 類工具，`~yz/prog/` 是個不錯的入口。
 
 ### 4.4 `devel/~day/` — 大型框架 / OOP / 子系統實驗
 
@@ -203,6 +248,21 @@ devel/~ac/
 - 看 `joop/` 學 SPF 裡的 OOP 風格。
 - 看 `wfl/` / `hype3/` 理解作者如何把 SPF 拉到 framework 層級。
 
+**代表內容**：
+
+- `devel/~day/joop/oop.f`
+- `devel/~day/joop/win/`
+- `devel/~day/wfl/wfl.f`
+- `devel/~day/wfl/examples/`
+- `devel/~day/hype3/`
+- `devel/~day/fsim/`
+
+**實際例子**：
+
+1. `joop/` 很適合拿來看 SPF 裡如何做 OOP / 類別系統，而不只是單純的函式庫。  
+2. `wfl/` 看起來是更接近 GUI / application framework 的方向；如果你想看 SPF 如何長成完整框架，這裡很值得翻。  
+3. `wfl/examples/` 和 `joop/samples/` 這種子目錄，對於想看「能跑的範例程式」的讀者比主系統原始碼更友善。
+
 ### 4.5 `devel/~mak/` — compiler / asm / 語言工具實驗
 
 這一棵對喜歡語言實作的人很有味道：
@@ -230,6 +290,20 @@ devel/~ac/
 
 - 看 `FBasComp/` 理解 Forth-based compiler 實驗。
 - 看 `CFASM/` 或 `FOROPT.F` 對照主系統 optimizer / asm 的另一路脈絡。
+
+**代表內容**：
+
+- `devel/~mak/FOROPT.F`
+- `devel/~mak/CFASM/CPU80486.4TH`
+- `devel/~mak/WAPI.F`
+- `devel/~mak/FBasComp/`
+- `devel/~mak/WIN32FOR/`
+
+**實際例子**：
+
+1. 想看 SPF 周邊的 80486 assembler / disassembler 實驗，就先看 `CFASM/CPU80486.4TH`。  
+2. 想找與 optimizer 相關的平行思路，`FOROPT.F` 是很自然的入口。  
+3. 想看作者如何把 SPF 推向 Win32FOR / Basic compiler 類前端，則可看 `FBasComp/` 與 `WIN32FOR/`。
 
 ### 4.6 `devel/~ygrek/` — library + SPF 補強 + 應用專案混合區
 
@@ -259,6 +333,21 @@ devel/~ac/
 - 想找 XML safe / enum / FSM 類小工具時先翻 `~ygrek/lib/`。
 - 想看 `spf/` 子樹裡對 SPF 本體行為的補充或測試。
 
+**代表內容**：
+
+- `devel/~ygrek/lib/xmlsafe.f`
+- `devel/~ygrek/lib/fsm.f`
+- `devel/~ygrek/lib/enum.f`
+- `devel/~ygrek/lib/net/`
+- `devel/~ygrek/spf/autoc.f`
+- `devel/~ygrek/prog/`
+
+**實際例子**：
+
+1. 若你想找中型、可直接借用的 utility 庫（XML、FSM、bit、net、parse），`~ygrek/lib/` 很值得翻。  
+2. 若你想看 SPF 本體外圍的自動補完 / included / 測試小補強，`~ygrek/spf/` 會比主系統 `src/` 更實驗性。  
+3. 若你想找「library + project」混合風格的作者工作樹，`~ygrek` 是很好的樣本。
+
 ### 4.7 `devel/~micro/` — 真正做成產品 / 工具的應用程式群
 
 這裡不像 library 倉，比較像一組完整應用程式：
@@ -280,6 +369,20 @@ devel/~ac/
 
 - 想研究 SPF 如何做 scheduler / reminder 類應用，就看 `SHEDULER/` 或相關工具。
 - 想看完整應用的專案佈局，而不是單一 `.f` 檔，就看 `DELETER/`、`calendar/` 等目錄。
+
+**代表內容**：
+
+- `devel/~micro/SHEDULER/`
+- `devel/~micro/DELETER/`
+- `devel/~micro/calendar/`
+- `devel/~micro/wwwlib/`
+- `devel/~micro/filetrunc/`
+
+**實際例子**：
+
+1. 想看 SPF 做成完整工具程式的樣子（含 `MAKE.F`、`cfg`、`doc.txt`、`DISTRIB/`），`SHEDULER/` 是很好的案例。  
+2. 想看實際產品感較重的專案佈局，不只是 library，`DELETER/`、`calendar/` 很值得翻。  
+3. 想理解 SPF 在 WWW / scheduler / file utility 類領域的應用範圍，`~micro` 比 core docs 更直觀。
 
 ### 4.8 `devel/~nn/` — 另一套個人 library / class 倉
 
@@ -308,6 +411,21 @@ devel/~ac/
 
 - 對照 `ac-lib3/string/CONV.F` 與 `~nn/lib/base64.f` 的不同風格。
 - 看 `class/` 了解另一位作者的 OOP / class 思路。
+
+**代表內容**：
+
+- `devel/~nn/class/`
+- `devel/~nn/lib/base64.f`
+- `devel/~nn/lib/unicode.f`
+- `devel/~nn/lib/script.f`
+- `devel/~nn/lib/web/`
+- `devel/~nn/lib/win/`
+
+**實際例子**：
+
+1. 若你想比較不同作者如何做 base64 / unicode / file / web 工具，`~nn/lib/` 很適合拿來和 `ac-lib3` 對照。  
+2. 若你想看另一套 class / library 組織方式，`~nn/class/` 與 `~nn/lib/` 會提供不同於 `~day` 或 `ac-lib3` 的風格。  
+3. 若你想找一套偏「個人 library 倉」而非單一專案的樣本，`~nn` 很典型。
 
 ---
 
