@@ -190,16 +190,9 @@ devel/
 └── ...
 ```
 
-這些子樹下混合了：
+這些子樹下混合了額外 library、prototype / experimental code、samples、build / conversion tools，以及大量作者自己的歷史資產。簡單說，`devel/` 比較像「**社群與作者群的開發資產倉庫**」，而不是 `src/` 那種穩定、直接進入主系統建構流程的正式模組樹。
 
-- 額外 library
-- prototype / experimental code
-- samples
-- 文件與作者註記（`AUTHOR.TXT`、`index.html` 等）
-- build / conversion tools
-- 歷史遺留程式與社群貢獻
-
-換句話說，`devel/` 比較像「**社群與作者群的開發資產倉庫**」，而不是 `src/` 那種穩定、直接進入主系統建構流程的正式模組樹。
+如果你想更深入了解 `devel/` 的作者子樹、主要工作區（例如 `~ac`、`~pinka`、`~yz`、`~day`、`~micro`）、它們和 `src/` / `ac-lib3/` 的關係，以及該從哪幾棵子樹開始讀，請直接看新增的專章 [17-devel.md](17-devel.md)。那一章會把 `devel/` 當成「作者工作樹地圖」來整理，而不只是概觀提及。 
 
 #### 它們與主系統的實際關聯
 
@@ -207,7 +200,6 @@ devel/
 
 - [`src/spf_module.f:49`](file:///Users/wenij/work/forth/spf/src/spf_module.f#L49) 會把 `devel/` 拼進模組搜尋路徑；也就是說，模組載入機制會把 `devel/` 視為一個可搜尋的 library root。
 - [`src/win/res/res.bat:6`](file:///Users/wenij/work/forth/spf/src/win/res/res.bat#L6) 會呼叫 `~yz/prog/fres/fres.f`，實際上就是 repo 中的 [`devel/~yz/prog/fres/fres.f`](file:///Users/wenij/work/forth/spf/devel/~yz/prog/fres/fres.f) —— 這表示 Windows 資源檔建構流程確實依賴 `devel/` 裡的工具。
-- [`docs/trace/05-io-error-init.md`](file:///Users/wenij/work/forth/spf/docs/trace/05-io-error-init.md) 已說明 `spf_module.f` 會把 `devel/` 納入模組路徑；[`docs/trace/06-build-save.md`](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md) 也已提到 `fres.f` 來自 `devel/~yz/prog/fres/`。
 
 #### 閱讀這份 trace 文件時，應怎麼看待這兩個目錄？
 
