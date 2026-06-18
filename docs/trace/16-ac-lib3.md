@@ -1052,10 +1052,17 @@ ReduceMem
 **實際 Forth 範例碼**：
 
 ```forth
+S" ac-lib3/win/registry2.f" INCLUDED
+
 S" ProxyServer" S" SOFTWARE\\Example" StrValue
 ```
 
 ```forth
+S" ac-lib3/win/registry2.f" INCLUDED
+
+: TYPECR ( addr u -- ) TYPE CR ;
+
+S" SOFTWARE\\Example" HKEY_LOCAL_MACHINE RG_OpenKey THROW  ( h )
 ['] TYPECR SWAP RG_ForEachKey
 ```
 
@@ -1193,11 +1200,16 @@ S" MyService" DeleteService
 **實際 Forth 範例碼**：
 
 ```forth
-ComInit
+S" ac-lib3/win/com/COM.F" INCLUDED
+
+ComInit THROW
 ```
 
 ```forth
-S" Some.ProgID" CLSIDFromProgID
+S" ac-lib3/win/com/COM.F" INCLUDED
+
+S" Scripting.FileSystemObject" ProgID>CLSID THROW  ( clsid-addr )
+\ 之後可把 clsid-addr 交給 CoCreateInstance 類流程
 ```
 
 ```forth
@@ -1257,15 +1269,25 @@ ComExit
 **實際 Forth 範例碼**：
 
 ```forth
-SocketsStartup
-CreateSocket
+S" ac-lib3/win/winsock/SOCKETS.F" INCLUDED
+
+SocketsStartup THROW
+CreateSocket THROW   ( socket )
 ```
 
 ```forth
-S" mail.example.com" 25 fsockopen
+S" ac-lib3/STR2.F" INCLUDED
+S" ac-lib3/win/winsock/PSOCKET.F" INCLUDED
+
+S" www.example.com" 80 fsockopen  ( socketline )
+" GET / HTTP/1.0{CRLF}{CRLF}" OVER fputs
+fgets STR@ TYPE
+fclose
 ```
 
 ```forth
+S" ac-lib3/win/winsock/dns_q.f" INCLUDED
+
 S" example.com" GetMXs
 ```
 
