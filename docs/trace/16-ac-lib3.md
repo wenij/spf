@@ -16,6 +16,10 @@
 - 除錯 / 記憶體 / 小工具
 - 社群累積的 reusable library
 
+從檔頭註解與命名慣例看，這一區主要是 **Andrey Cherezov（`~ac`）** 與其它 SPF 社群作者（特別是 **Ruvim Pinka** 等）在 1997–2003 年間累積的應用層函式庫。目錄中的註解大量使用 **CP1251 俄文編碼**，因此若直接用 UTF-8 工具打開原檔，常會看到亂碼；閱讀時要有這個心理準備。
+
+另一個很重要的特徵是：`ac-lib3/` **明顯偏向 Win32 應用開發**。雖然裡面也有字串、BNF、mbox 解析等比較通用的模組，但最大的子樹是 `win/`，而且多數實作都直接包 `ADVAPI32.DLL`、`USER32.DLL`、`KERNEL32.DLL`、`WSOCK32.DLL` 等 Windows API。這也是為什麼它更像「應用開發資產庫」，而不是 SPF 本體的一部分。
+
 因此，理解 `ac-lib3/` 最好的方式不是把它當成「主系統的一部分」，而是把它當成：
 
 > **SP-Forth 生態系裡，給實際應用開發者用的延伸函式庫與技巧包。**
@@ -111,7 +115,16 @@ ac-lib3/
 
 ### 3.4 `STR.F` / `STR2.F` / `STR3.F` / `str4.f` — 字串模板與插值系列
 
-這四個檔案顯然是同一個主題逐步演進的版本。檔頭說明直接提到它們想提供比較接近 **Perl / PHP 風格**的字串能力，例如：
+這四個檔案不是彼此獨立、平行存在的四套不同字串庫，而比較像**同一個主題逐步演進的版本族譜**：
+
+- `STR.F`：較舊，依賴 `TEMPS.F`
+- `STR2.F` / `STR3.F` / `str4.f`：較新，依賴 `LOCALS.F`
+- `STR3.F`：再往前多加 `%WORD` / `%I` / `%J` 這類巨集槽
+- `str4.f`：再往下接上自訂記憶體管理（`SALLOCATE` / `FREESTR`）
+
+也就是說，這不是「你應該全部一起用」的四套庫，而是「你應該挑一個與當前程式風格最相容的版本」。
+
+檔頭說明直接提到它們想提供比較接近 **Perl / PHP 風格**的字串能力，例如：
 
 - 多行字串
 - 模板字串
@@ -201,7 +214,15 @@ ac-lib3/
 - `ac-lib3/win/com/`
 - `ac-lib3/win/odbc/`
 
-這一類很明顯是為 Windows 應用開發者準備的。它的價值在於：
+這一類很明顯是為 Windows 應用開發者準備的，而且其實可以再細分成幾個子群：
+
+- **registry / ini / file / date**：設定、檔案系統與時間工具
+- **process / service / access**：程序、服務與帳號權限管理
+- **winsock**：TCP/UDP/DNS/IP helper
+- **com**：COM / OLE / automation / ActiveX 整合
+- **window**：GUI / dialog / tray icon / popup menu
+
+它的價值在於：
 
 - 不用每次都從 `WINAPI:` 宣告開始包整套 API
 - 某些常見系統功能已經整理成 SPF 可直接調用的庫
@@ -216,10 +237,11 @@ ac-lib3/
 
 **例子**：
 
-- 想把設定寫進 registry → `win/REGISTRY.F`
+- 想把設定寫進 registry → `win/REGISTRY.F`（舊版）或 `win/registry2.f`（較新、改寫成 `LOCALS.F` 風格）
 - 想讀/寫 ini 設定檔 → `win/ini.f`
 - 想啟動/管理外部 process → `win/process/`
 - 想做 socket client/server → `win/winsock/`
+- 想做 ADO / Outlook / IE / XML / ActiveX 這類 Windows automation → `win/com/` 與它的 `samples/`
 
 ### 4.4 記憶體、除錯與小工具：`memory/`、`debug/`、`tools/`
 
@@ -244,6 +266,11 @@ ac-lib3/
 - `tools/load_lib.f`：動態載入小工具
 - `tools/dump_winapi.f`：WinAPI 相關資料整理
 - `memory/heap_enum.f`：heap enumeration 類工具
+
+其中有兩個特別值得點名：
+
+- `tools/map.f`：不是一般 utility，而是會 **hot-patch `COMPILE,` / `LIT,`** 的插樁工具，屬於非常 SPF 味的「編譯期黑魔法」
+- `res_ctrl.f`：偏 **Eserv2 專案** 的 resource tracking 模式，適合拿來學如何做多執行緒資源表，但不一定適合直接搬進一般專案
 
 ### 4.5 翻譯 / 規則 / 小型專題：`transl/`、`list/`、`mbox/`、`util/`
 
@@ -347,6 +374,49 @@ ac-lib3/
 | 比較像可直接重用的庫 | `LOCALS.F`, `TEMPS.F`, `REQUIRE.F`, `STR*.F`, `string/`, `win/` | 先看 API / 用法，再決定要不要直接 include |
 | 比較像工具與除錯輔助 | `debug/`, `tools/`, `memory/` | 遇到特定需求時再翻，常有現成小工具 |
 | 比較像範例 / 實驗 / 參考倉 | `transl/`, `list/`, `mbox/`, `ruvim/`, 部分 `util/` | 更適合找思路、命名與實作風格，不一定直接搬進主專案 |
+
+若再細分一點，可加上幾個「歷史軌跡」線索：
+
+- `STR.F` → `STR2.F` / `STR3.F` / `str4.f`：反映字串模板系統與 locals 機制的演進
+- `REGISTRY.F` → `registry2.f`：反映 `TEMPS.F` 風格往 `LOCALS.F` 風格的遷移
+- `win/winsock/` 與 `win/winsock/ws2/` 兩套並行：反映 WinSock 舊版與較新版 API 的並存
+- `win/com/samples/`：顯示 `ac-lib3/` 不只是一組 API wrapper，也包含大量「如何真的拿這些 wrapper 做事」的範例
+
+#### 一句話分類法
+
+- **Foundational**：`LOCALS.F`、`REQUIRE.F`、`STR2.F`、`string/`、`win/winver.f`
+- **直接可用的應用庫**：`win/registry2.f`、`win/ini.f`、`win/winsock/`、`win/com/`
+- **工具 / 除錯**：`debug/TRACE.F`、`tools/`、`memory/`
+- **歷史 / 範例 / Eserv2 脈絡**：`STR.F`、`REGISTRY.F`、`mbox/`、`res_ctrl.f`、`win/com/samples/`
+
+---
+
+## 6.1 依賴關係速記
+
+如果你想用最少的心智負擔記住 `ac-lib3/` 的結構，可以用下面這個簡化圖：
+
+```forth
+                 REQUIRE.F   ← 載入機制 / 路徑組裝
+                      │
+        ┌─────────────┴─────────────┐
+        │                           │
+   LOCALS.F（現代）            TEMPS.F（較舊）
+        │                           │
+   ┌────┴──────────────┐            ├── STR.F
+   │                   │            ├── REGISTRY.F
+ STR2/3/4 + string/    registry2.f  └── 部分舊 Win32 庫
+   │                   │
+   ├── MIME / regexp   ├── win/ini.f
+   ├── get_params      ├── win/file/
+   ├── uppercase       ├── win/winsock/
+   └── pattern         └── 其他較新 win/* 子樹
+```
+
+這不是精確的 require graph，而是一個足夠實用的閱讀心智模型：
+
+- `LOCALS.F` 與 `TEMPS.F` 是兩代語法基礎
+- `STR*`、`registry*`、大量 `win/*` 都沿著這條演進軸分成新舊兩路
+- `string/` 與 `win/` 是兩個最肥、最有實際用途的分支
 
 實務上，若你是：
 
