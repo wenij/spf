@@ -4,7 +4,7 @@
 > 原始碼版權：Copyright [C] 1992-2000 A.Cherezov ac@forth.org
 
 > 本章目標：理解 host/target 雙位址空間如何切換、`[T]/[I]` 夾擊模式怎麼確保目標映像的正確性。
-> 
+>
 > 註：`tc_spf.F` 檔頭仍寫著「SP-Forth v3.7x」，這是該檔沿用的歷史性來源標頭；本文件追蹤的實際系統則是目前 repo 中的 SPF4 / kernel version 429。
 
 ---
@@ -1188,7 +1188,7 @@ HERE 10000 + 10000 / 10000 * 2000 + DP !
 
 ## 12. noopt.f：最小最佳化器
 
-> noopt.f 在最佳化器架構中的角色（與 macroopt.f 的對照），另見 [07-optimizer.md §2](07-optimizer.md#2-nooptf--最小最佳化器)；本章聚焦於其在交叉編譯流程中的使用脈絡。
+> noopt.f 在最佳化器架構中的角色（與 macroopt.f 的對照），另見 [07-optimizer.md §2](07-optimizer.md#2-nooptf-最小最佳化器)；本章聚焦於其在交叉編譯流程中的使用脈絡。
 
 ### 12.1 什麼是 noopt.f？
 
@@ -1257,7 +1257,7 @@ noopt.f 保留相同的字詞介面與基本的 `INLINE,` 複製機制，但 `CO
 
 ## 13. ELF 儲存（xsave.f）
 
-> 關於 XSAVE 的 ELF 段表填寫與 gcc 連結命令細節，另見 [06-build-save.md §8](06-build-save.md#8-xsave--交叉編譯-elf-儲存xsavef)；本章聚焦於交叉編譯流程中的重定位與儲存步驟。
+> 關於 XSAVE 的 ELF 段表填寫與 gcc 連結命令細節，另見 [06-build-save.md §8](06-build-save.md#8-xsave-交叉編譯-elf-儲存xsavef)；本章聚焦於交叉編譯流程中的重定位與儲存步驟。
 
 ### 13.1 XSAVE 流程
 
@@ -1382,7 +1382,7 @@ SOURCE + 1 CHARS - C@ 0xA = CHAR | AND PARSE | UNIX-LINES
 堆疊追蹤：
 
 ```forth
-: DISPATCH ...        
+: DISPATCH ...
          ↓ 產生 JMP to ???, 並將位址留在堆疊上
   ..: CASE1 ;..
   ..: CASE2 ;..

@@ -4,7 +4,7 @@
 > 原始碼版權：Copyright [C] 1992-1999 A.Cherezov ac@forth.org
 
 > 本章目標：理解 SP-Forth 如何用 `EAX = TOS` 的暫存器模型，讓 `DUP` 只要 2 條指令、`=` 完全不用分支跳躍。
-> 
+>
 > 若你對 IA-32 組語、`CODE ... END-CODE`、`C,` / `,` 這類 SP-Forth assembler 寫法還不熟，建議先讀 [08-append-a.md](08-append-a.md) 再回來。
 
 ---
@@ -87,6 +87,7 @@ FPU 堆疊 — 獨立的 80 位元暫存器堆疊：
 - 需要：n1 + n2 → EAX
 
 如果 EBP 指向 TOS-1（次項），那麼：
+
 ```asm
 ADD EAX, [EBP]    ; EAX = n2 + n1 = n3
 LEA EBP, 4[EBP]  ; EBP += 4，彈出次項
@@ -606,10 +607,13 @@ END-CODE
 這是為了將帶號整數的比較轉換為無號整數的比較。Forth 的 `DO` 迴圈允許界限和索引的任意組合（如 `3 10 DO ... LOOP` 或 `10 3 DO ... -1 +LOOP`）。將界限和索引都加上 `0x80000000` 後，帶號比較就變成無號比較，使得溢位檢測可以用一個簡單的 `JNO`（不溢位則跳躍）指令來實現。
 
 **迴圈範例**：
+
 ```forth
 10 0 DO I . LOOP
 ```
+
 編譯後的迴圈體：
+
 ```asm
 ; DO 部分（C-DO + PUSH 界限/索引）
 ; ... 迴圈體 ...

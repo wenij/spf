@@ -61,7 +61,7 @@ S" console.exe" SAVE
 
 ```forth
 \ 1. 載入或定義你的應用程式
-INCLUDED myapp.f
+S" myapp.f" INCLUDED
 
 \ 2. 設定啟動入口
 ' MAIN TO <MAIN>
@@ -118,6 +118,8 @@ gcc -m32 -Wl,forth.ld -ldl -lpthread -no-pie
         ↓
 OS 可直接執行的 spf4 / spf4e
 ```
+
+這條 POSIX 路徑實際上偏向 Linux build：需要 `gcc -m32` / multilib、GNU `make`、`sha1sum`（或相容的 coreutils）與一般連結工具。macOS 或未安裝 multilib 的 Linux 不能直接照抄這條命令。
 
 在建構 `spf4` 時，Makefile 大致做：
 
@@ -406,16 +408,18 @@ SP-Forth 的 `SAVE` 是 full system image model；它通常仍保留 Forth dicti
 
 如果你第一次理解這部分，建議照這個順序：
 
-1. [06-build-save.md §1](06-build-save.md#1-建構系統makefile--posixmakefile)：先理解 `spf4` / `spf4e` 怎麼被建出來。
-2. [06-build-save.md §7](06-build-save.md#7-posix-映像儲存posixsavef--elff)：理解 POSIX `SAVE` 如何產生 ELF object 並連結。
-3. [06-build-save.md §8](06-build-save.md#8-xsave--交叉編譯-elf-儲存xsavef)：理解 `XSAVE` 與 target address relocation。
-4. [09-windows-platform.md §7](09-windows-platform.md#7-pe-映像儲存spf_pe_savef-深入解析)：理解 Windows PE template / import table。
+1. [06-build-save.md §1](06-build-save.md#1-建構系統makefile-+-posixmakefile)：先理解 `spf4` / `spf4e` 怎麼被建出來。
+2. [06-build-save.md §7](06-build-save.md#7-posix-映像儲存posixsavef-+-elff)：理解 POSIX `SAVE` 如何產生 ELF object 並連結。
+3. [06-build-save.md §8](06-build-save.md#8-xsave-交叉編譯-elf-儲存xsavef)：理解 `XSAVE` 與 target address relocation。
+4. [09-windows-platform.md §7](09-windows-platform.md#7-pe-映像儲存spf_pe_savef深入解析)：理解 Windows PE template / import table。
 5. [05-io-error-init.md](05-io-error-init.md)：理解 executable 啟動後 runtime initialization。
 6. [14-walkthrough.md](14-walkthrough.md)：把 parser、compiler、optimizer、image save、runtime startup 串成端到端流程。
 
 ---
 
 ## 14. 實作一個最小 application 的建議流程
+
+本節保留機制脈絡；可直接照抄的 recipe 已整理到 [15-standalone-cookbook.md](15-standalone-cookbook.md)。
 
 若目標是「使用者直接執行 `myapp` / `myapp.exe`，不需要另外輸入 `spf4 myapp.f`」，建議按這個順序做：
 
@@ -432,7 +436,7 @@ SP-Forth 的 `SAVE` 是 full system image model；它通常仍保留 Forth dicti
 先確認：
 
 ```forth
-INCLUDED myapp.f
+S" myapp.f" INCLUDED
 run
 ```
 
@@ -443,7 +447,7 @@ run
 console application 可用：
 
 ```forth
-INCLUDED myapp.f
+S" myapp.f" INCLUDED
 ' run TO <MAIN>
 S" myapp" SAVE
 ```
@@ -459,7 +463,7 @@ S" myapp" SAVE
 GUI application 則通常走 `?GUI` / `MAINX`：
 
 ```forth
-INCLUDED myapp.f
+S" myapp.f" INCLUDED
 0 TO SPF-INIT?
 TRUE TO ?GUI
 ' NOOP TO <MAIN>

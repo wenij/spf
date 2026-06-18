@@ -1,7 +1,7 @@
 # SP-Forth/4 原始碼追蹤 — 建構系統、映像儲存與輔助檔案
 
 > 本章目標：了解 spf4orig 如何自舉編譯出 spf4，ELF .o 如何產生，以及 SAVE / XSAVE 的流程差異。
-> 
+>
 > 對應原始碼：`Makefile`、`posix/Makefile`、`posix/config.c`、`posix/config.auto.f`、
 > `spf_compileoptions.f`、`spf_stub.f`、`spf_date.f`、`spf_xmlhelp.f`、
 > `elf.f`、`xsave.f`、`posix/save.f`、`tsave.f`、`done.f`、`spf.f`（主控腳本）
@@ -78,6 +78,8 @@ spf4.o: $(common-sources) posix/config.auto.f posix/*.f $(if $(HOSTFORTH),,../$(
 這和 SP-Forth 的儲存模型有直接關係：交叉編譯器與 `XSAVE` 會先以 `IMAGE-START` / `.forth` 為基準計算目標位址與重定位資訊，再交給最終連結步驟。因此若強制使用 PIE，會打亂這套「先決定位址、後做重定位」的假設。
 
 **端到端觀察**（實際建構產物）：
+
+這條路徑預設是 Linux + 32-bit toolchain：需要 `gcc -m32` / multilib、GNU `make`、`sha1sum`（或相容的 coreutils）與一般連結工具。macOS 或未安裝 multilib 的 Linux 可能會在工具鏈檢查或連結階段失敗。
 
 ```bash
 cd src
@@ -626,7 +628,7 @@ SP-Forth 產生的 spf4.o（可重定位物件檔）
     ├── 包含：節區標頭表（Section Header Table）
     ├── 包含：.forth、.space、.dltable 等節區
     └── 不含：程式標頭表（Program Header Table = 0）
-            
+
 gcc 連結後產生的 spf4（可執行檔）
     ├── 包含：程式標頭表（Program Header Table）
     ├── 包含：LOAD 段（將 .forth、.space 節區合併載入）
@@ -867,7 +869,7 @@ SECTIONS
 
 ## 7. POSIX 映像儲存（posix/save.f + elf.f）
 
-> 本章聚焦 SAVE 在建構流程中的角色（ELF 產生、gcc 連結、spf4e 擴充版）；關於 SAVE 的 POSIX 平台層實作細節（段表欄位、重定位項目格式），另見 [04-posix-platform.md §14](04-posix-platform.md#14-elf-映像儲存posixsavef-深入解析)。
+> 本章聚焦 SAVE 在建構流程中的角色（ELF 產生、gcc 連結、spf4e 擴充版）；關於 SAVE 的 POSIX 平台層實作細節（段表欄位、重定位項目格式），另見 [04-posix-platform.md §14](04-posix-platform.md#14-elf-映像儲存posixsavef深入解析)。
 
 ### 7.1 SAVE 流程概覽
 

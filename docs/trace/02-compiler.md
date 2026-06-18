@@ -1,7 +1,7 @@
 # SP-Forth/4 原始碼追蹤 — 編譯器子系統深入解析
 
 > 本章目標：看懂 token 如何被剖析、字詞如何被搜尋、編譯器如何決定要 CALL、內聯還是摺疊常數。
-> 
+>
 > 對應原始碼：`src/compiler/` 目錄下所有檔案
 > 原始碼版權：Copyright [C] 1992-1999 A.Cherezov ac@forth.org
 
@@ -433,7 +433,7 @@ JNZ SHORT @@2               \ 長度不匹配，繼續搜尋
 **長度 > 3**——`CDR-BY-NAME`（第 90~134 行）：先比對前 3 個字元（呼叫 CDR-BY-NAME3），然後對剩餘字元進行 `REPZ CMPS` 逐字元比對。
 
 ```asm
-; u > 3 时的完整比對流程：
+; u > 3 時的完整比對流程：
 CALL ' CDR-BY-NAME3   ; 先快速篩選前 3 字元
 OR EAX, EAX
 JZ SHORT @@9          ; 不匹配
@@ -564,7 +564,7 @@ Forth 搜尋順序的管理遵循 ANSI 94 SEARCH 詞集標準：
 
 執行流程：
 1. `HERE LAST !`：記錄目前字典位址到 LAST（用於 `IMMEDIATE` 等操作）
-2. `HERE 2SWAP S", `：在字典中寫入計數字串（長度位元組 + 字元 + 對齊）
+2. `HERE 2SWAP S",`：在字典中寫入計數字串（長度位元組 + 字元 + 對齊）
 3. `SWAP DUP @ , !`：將新 NFA 鍊結到詞彙表的鍊頭
 
 ### 7.3 名稱欄位存取字
@@ -736,7 +736,7 @@ COMPILE, ( xt )
 
 編譯一個 32 位元立即常值的機器碼序列：
 1. `['] DUP INLINE,`：內聯 DUP 的代碼（`MOV EAX, [EBP]; LEA EBP, 4[EBP]`）
-2. `0B8 C, , `：產生 `MOV EAX, imm32`（0xB8 是 MOV EAX 的 opcode）
+2. `0B8 C, ,`：產生 `MOV EAX, imm32`（0xB8 是 MOV EAX 的 opcode）
 3. `OPT_INIT` / `OPT_CLOSE`：標記最佳化區段
 
 **組合語言對照**：
@@ -852,7 +852,7 @@ SHEADER ( addr u -- )
 ;
 ```
 
-** ->VARIABLE**（第 191~195 行）：
+**->VARIABLE**（第 191~195 行）：
 
 ```forth
 : ->VARIABLE ( x "<spaces>name" -- )
@@ -946,7 +946,7 @@ CREATE 定義後：
 ```
 
 USER 變數透過 EDI 暫存器存取（參見 01-kernel.md 的暫存器分配），實作方式是：
-1. 在 PFA 中存儲偏移量
+1. 在 PFA 中儲存偏移量
 2. `_USER-CODE` 先以 `MOV EAX, [EAX]` 讀出 PFA 中的 USER offset，再用 `LEA EAX, [EDI][EAX]` 計算並回傳該 USER 變數的**位址**（`spf_defkern.f:27-34`）；它不會自動讀取變數內容
 3. `USER-ALIGNED` 確保偏移量對齊到 4 位元組邊界
 
@@ -1531,7 +1531,9 @@ ABORT" 的編譯期行為：
 
 直譯期行為：檢查堆疊頂端，若為真則呼叫 `THROW-ERRMSG`（擲回 -2 例外帶錯誤訊息），否則丟棄字串。
 
-關於原始碼中的 `( never )` 註解：它指的是「在**編譯**狀態下不會走到這條直譯分支」（因為 `ABORT"` 是 IMMEDIATE，編譯狀態走的是 `_CLITERAL-CODE` + `(ABORT")` 那條）。**在直譯狀態下這條分支確實會執行**：`ABORT"` 的直譯語意是 `( i*x x1 -- | i*x )`——它消耗的是呼叫前**已經在資料堆疊上**的旗標 `x1`。`[CHAR] " PARSE` 解析出訊息字串（c-addr u）後，`ROT` 把原本的旗標 `x1` 轉到堆疊頂端；若 `x1` 為真，`IF THROW-ERRMSG` 就把解析出的字串當作錯誤訊息丟出 `-2`，否則 `2DROP` 丟棄字串並返回。
+關於原始碼中的 `( never )` 註解：它指的是「在**編譯**狀態下不會走到這條直譯分支」。因為 `ABORT"` 是 IMMEDIATE，編譯狀態走的是 `_CLITERAL-CODE` + `(ABORT")` 那條。
+
+**在直譯狀態下這條分支確實會執行**：`ABORT"` 的直譯語意是 `( i*x x1 -- | i*x )`，它消耗的是呼叫前**已經在資料堆疊上**的旗標 `x1`。`[CHAR] " PARSE` 解析出訊息字串（c-addr u）後，`ROT` 把原本的旗標 `x1` 轉到堆疊頂端；若 `x1` 為真，`IF THROW-ERRMSG` 就把解析出的字串當作錯誤訊息丟出 `-2`，否則 `2DROP` 丟棄字串並返回。
 
 ### 13.6 數字解析：?SLITERAL1 與 ?SLITERAL2
 

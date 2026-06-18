@@ -4,7 +4,7 @@
 > 原始碼版權：Copyright [C] 1992-1999 A.Cherezov ac@forth.org
 
 > 本章目標：看懂 WINAPI: 如何延遲解析 DLL 函式、API-CALL 的 stdcall 包裝、以及 SEH 如何取代 POSIX 信號。
-> 
+>
 > 閱讀提示：本文件聚焦 **Windows 平台實作、PE 格式、SEH 例外處理與 Windows API 呼叫**。若你想看較高層的 I/O、初始化與例外生命週期，請接續閱讀 [05-io-error-init.md](05-io-error-init.md)。與 POSIX 平台（見 [04-posix-platform.md](04-posix-platform.md)）的對照，請見 §11。
 
 ---
@@ -198,7 +198,7 @@ END-CODE
 
 這三個字與 POSIX 版完全對稱，差異僅在 `_WNDPROC-CODE` 內部棧楨設定。
 
-### 2.4 WINAPI: 宣告實例（spf_win_proc.f）
+### 2.5 WINAPI: 宣告實例（spf_win_proc.f）
 
 `spf_win_proc.f` 是 **Windows API 函式宣告的中心庫**，所有跨檔案共用的 `WINAPI:` 呼叫集中在這裡。它僅包含 41 行 `WINAPI:` 宣告（不包含任何可執行邏輯）：
 
@@ -667,7 +667,7 @@ CODE AO_INI
   ALSO FORTH , PREVIOUS
   A; HERE 4 - ' AOLL EXECUTE !
   CALL EAX          ; 呼叫 LoadLibraryA
-  
+
   PUSH ECX
   PUSH EAX
   A; 0xA1 C, AddrOfGetProcAddress
@@ -710,7 +710,7 @@ Windows 版使用 Win32 `CreateFileA`/`ReadFile`/`WriteFile` 家族實作 ANS Fo
 ;
 ```
 
-`CREATE-FILE` 捨棄 `fam` 中的 ` fam`（`NIP` 掉長度），保留檔名與存取模式，映射到 `CreateFileA` 的參數：
+`CREATE-FILE` 以 `NIP` 捨棄檔名長度 `u`，保留檔名字串位址與存取模式 `fam`，再映射到 `CreateFileA` 的參數：
 
 | Forth 參數 | Win32 參數 | 說明 |
 |-----------|-----------|------|
@@ -949,11 +949,11 @@ WINAPLINK 鏈 ← AO_INI ──→         WINAPLINK 鏈
 | `spf_win_memory.f` | HeapCreate/HeapAlloc | `posix/memory.f` |
 | `spf_win_io.f` | Windows 檔案 I/O | `posix/io.f` |
 | `spf_win_const.f` | 記憶體與檔案 I/O 常數 | `posix/const.f` |
-| `spf_win_conv.f` | 編碼轉換 | — |
+| `spf_win_conv.f` | ANSI/OEM 編碼轉換，支援 Windows console 顯示與輸入時的 code page 轉換 | — |
 | `spf_win_envir.f` | 環境查詢、錯誤解碼 | `posix/envir.f` |
 | `spf_win_init.f` | 程序初始化、SEH | `posix/init.f` |
 | `spf_win_con_io.f` | 控制台 I/O、EKEY | `posix/con_io.f` |
 | `spf_win_except.f` | 例外 façade | `posix/except.f` |
 | `spf_win_module.f` | 路徑管理 | `posix/module.f` |
-| `spf_win_cgi.f` | CGI 支援 | — |
+| `spf_win_cgi.f` | CGI 啟動選項與環境處理；雖位於 `win/`，也被 POSIX 建構流程沿用 | — |
 | `spf_pe_save.f` | PE 格式儲存 | `posix/save.f` |

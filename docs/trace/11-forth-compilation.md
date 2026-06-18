@@ -110,7 +110,7 @@ USER STATE     \ spf_translate.f:10
 步驟 2: STATE 設為非 0（進入編譯模式）
 步驟 3: 回到主迴圈，開始讀取後續的 "DUP" "+" ";"
 步驟 4: DUP → 不是 IMMEDIATE → 編譯成 CALL DUP
-步驟 5: +   → 不是 IMMEDIATE → 編譯成 CALL +  
+步驟 5: +   → 不是 IMMEDIATE → 編譯成 CALL +
 步驟 6: ;   → IMMEDIATE → 立即執行
         → ; 寫入 RET opcode
         → STATE 設為 0（回到直譯模式）

@@ -1,7 +1,7 @@
 # SP-Forth/4 原始碼追蹤 — 巨集最佳化器
 
 > 本章目標：理解最佳化器如何透過 OP 緩衝區追蹤已發出的機器碼，把 `CALL CONSTANT` 摺疊成 `MOV EAX, #值`。
-> 
+>
 > 對應原始碼：`macroopt.f`、`noopt.f`、`macroopt-hide.f`（部分）
 
 ---
@@ -554,7 +554,7 @@ TRUE VALUE J_OPT?
 : RESOLVE_OPT ( ADR -- )
     OPT? 0= IF DROP EXIT THEN
     J_OPT? 0= IF DROP EXIT THEN
-    
+
     DUP CELL- JP0 JpBuffSize + CELL- @ U<
     IF DUP CELL- REL@ CELL+ J-SET UMAX TO J-SET THEN
 
