@@ -166,6 +166,83 @@ ac-lib3/
 
 因此，把 `ac-lib3/` 理解成「**SP-Forth 生態系的延伸函式庫區**」會比把它當成 kernel 的一部分更準確。它比較接近 reusable library / optional toolkit，而不是 `src/` 那種「建構 `spf4` 本體時必須追蹤的主路徑」。
 
+#### `ac-lib3/` 可以做什麼？
+
+若把 `src/` 看成「SP-Forth 本體」，那 `ac-lib3/` 更像是一個「**實用功能超市**」：遇到特定問題時，先來這裡找有沒有現成模組，而不是立刻自己從零寫。從目前目錄結構與檔名判斷，它大致可以分成幾類：
+
+| 功能類別 | 代表檔案 / 目錄 | 用途概觀 |
+|----------|----------------|----------|
+| 語言延伸 | `LOCALS.F`, `TEMPS.F`, `REQUIRE.F` | 提供 locals / temp 變數語法、require / 載入輔助，讓 SPF 寫法更接近較高階的應用開發風格 |
+| 字串與文字處理 | `STR.F`, `STR2.F`, `STR3.F`, `str4.f`, `string/` | 字串模板、插值、大小寫轉換、pattern matching、MIME decode、regexp 等 |
+| Windows API / 系統整合 | `win/REGISTRY.F`, `win/ini.f`, `win/process/`, `win/winsock/`, `win/service/`, `win/com/` | registry、INI、process、socket、service、COM、ODBC 等 Windows 系統層整合 |
+| 記憶體與工具 | `memory/`, `tools/`, `debug/TRACE.F` | heap/記憶體輔助、動態載入小工具、除錯追蹤、WinAPI dump 類工具 |
+| 翻譯 / 規則 / 實驗 | `transl/`, `ruvim/`, `list/`, `mbox/`, `util/` | 文法、詞彙、資料結構、郵件解析、其他作者個人或小型功能實驗 |
+
+#### 幾個值得先認識的 top-level 檔案
+
+`ac-lib3/` 不是只有很多子目錄；top-level 本身就放了幾個很有代表性的檔案：
+
+- `LOCALS.F`：提供 locals 語法，從檔頭註解與範例可看到它支援類似 `{ a b c d \ e f -- }` 的區域變數宣告方式。若你想在 SPF 裡寫比較接近高階語言風格的 colon definition，這通常是第一個該看的檔案。
+- `TEMPS.F`：和 `LOCALS.F` 類似，但偏向 temp / 暫存命名空間與短期變數管理。從檔頭可看出它提供 `| ... |` 一類的暫存變數寫法。
+- `REQUIRE.F`：提供 `REQUIRE` / `REQUIRED` 類載入輔助，還能組合 local/web library path。若你想理解 SPF 舊時代的 library 載入策略，這個檔案很值得看。
+- `STR.F` / `STR2.F` / `STR3.F` / `str4.f`：這是一個持續演進的字串工具系列。從檔頭說明可以看出它們的目標是提供比較接近 Perl / PHP 風格的字串模板與內插能力，例如在字串中嵌入 `{word}` 一類的替換。
+
+#### 典型用途（帶例子）
+
+如果你在閱讀或維護 SPF 應用時遇到下面這些需求，通常可以先到 `ac-lib3/` 找現成做法：
+
+1. **想在 colon definition 裡用比較好寫的局部變數**  
+   先看 `ac-lib3/LOCALS.F`。  
+   例如：若你想把 `: FOO { a b -- } ... ;` 這種風格帶進 SPF，`LOCALS.F` 就是入口。
+
+2. **想要一個比較像 scripting language 的字串模板系統**  
+   先看 `ac-lib3/STR.F`、`STR2.F`、`STR3.F`、`str4.f`。  
+   例如：若你想把某個字詞的輸出嵌進字串中，而不是手動 `TYPE` / `HOLD` 拼接，這組檔案很可能已經做過。
+
+3. **想做正規表示式、MIME、參數剖析或大小寫處理**  
+   先看 `ac-lib3/string/`。  
+   例如：
+   - `string/mime-decode.f`：郵件或 HTTP 內容的文字解碼
+   - `string/regexp.f`：regexp 相關功能
+   - `string/get_params.f`：參數剖析
+   - `string/uppercase.f`：大小寫轉換
+
+4. **想直接摸 Windows registry / INI / process / socket / service**  
+   先看 `ac-lib3/win/`。  
+   例如：
+   - `win/REGISTRY.F`：registry 存取
+   - `win/ini.f`：INI 檔處理
+   - `win/process/`：process 相關功能
+   - `win/winsock/`：網路 socket 整合
+
+5. **想找除錯輔助或 WinAPI 掃描小工具**  
+   先看 `ac-lib3/debug/TRACE.F` 與 `ac-lib3/tools/`。  
+   例如：
+   - `debug/TRACE.F`：程式追蹤/除錯輔助
+   - `tools/dump_winapi.f`：WinAPI 相關資訊整理
+   - `tools/load_lib.f`：動態載入類輔助
+
+6. **想先找「已有人做過的應用型寫法」，再決定要不要自己造輪子**  
+   `ac-lib3/` 本身就很適合當參考倉。即使最後你不直接 `INCLUDED` 這些檔案，它們仍常常能提供：
+   - 命名習慣
+   - SPF 寫法範例
+   - 某類問題在 SPF 生態中「通常怎麼解」
+
+#### 讀 `ac-lib3/` 時要有的預期
+
+`ac-lib3/` 的價值主要在於**應用層與工具層**，而不是語言本體的核心機制。因此它比較像：
+
+- 「現成可用的庫」
+- 「SP-Forth 社群累積的技巧包」
+- 「找範例時很值得先翻的地方」
+
+而不是：
+
+- kernel / compiler 必經的主路徑
+- `spf.f` 建構時一定會走過的核心檔案集
+
+如果你的目標是理解 SPF 的本體架構，優先仍然是 `src/`；但若你的目標是**實際拿 SPF 做事情**，`ac-lib3/` 很可能比 `src/` 更快給你答案。
+
 #### `devel/`：開發者工作區、歷史資源與實驗程式
 
 `devel/` 更不像單一產品模組；它是一個**開發者工作區（developer workspace）**，裡面以 `~user` 的形式分成多位貢獻者的子樹，例如：
