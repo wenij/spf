@@ -289,9 +289,71 @@ ac-lib3/
 
 ---
 
+## 4.5a 如何載入 `ac-lib3/` 的 library？
+
+在看下一節各 library 的範例之前，先搞懂「**怎麼把它載進來**」很重要——否則範例裡的字（如 `STR@`、`RG_OpenKey`、`PcreMatch`）根本還不存在。`ac-lib3/` 主要有兩種載入方式。
+
+### 方式 A：用 SP-Forth 內建的 `INCLUDED`（最直接）
+
+SP-Forth 本體就有 `INCLUDED` / `INCLUDE`，可以直接載入一個 `.f` 檔：
+
+```forth
+S" ac-lib3/LOCALS.F" INCLUDED
+```
+
+```forth
+S" ac-lib3/string/regexp.f" INCLUDED
+```
+
+`spf_module.f` 的模組搜尋路徑（見 [05-io-error-init.md](05-io-error-init.md) 的 `+LibraryDirName`）會把相對路徑接到「**可執行檔目錄 + `/devel/`**」之下，因此在某些建構配置裡，`~ac/lib/...` 風格的路徑會被解析到 `devel/~ac/lib/...`（也就是 `ac-lib3/` 的母樹，見 [17-devel.md](17-devel.md)）。
+
+### 方式 B：用 `ac-lib3` 自帶的 `REQUIRE`（去重 + 路徑慣例）
+
+`ac-lib3/REQUIRE.F` 提供 `REQUIRE` / `REQUIRED`，這也是 `ac-lib3` 內部檔案彼此相依時最常見的寫法：
+
+```forth
+S" ac-lib3/REQUIRE.F" INCLUDED   \ 先載入 REQUIRE 機制本身
+REQUIRE RG_OpenKey ~ac/lib/win/registry.f
+```
+
+它的語意是：
+
+- `REQUIRE word libpath`
+  - 先 `FIND` 看 `word` 是否已存在
+  - 已存在 → 什麼都不做（**去重**，避免重複載入）
+  - 不存在 → 載入 `libpath`
+- 也可以用字串形式：
+  ```forth
+  S" RG_OpenKey" S" ~ac/lib/win/registry.f" REQUIRED
+  ```
+
+> **路徑代號小提醒**：`ac-lib3/` 原始檔內部大量使用 `~ac/lib/...`、`~yz/lib/...` 這種「作者路徑代號」。在這個 repo 的實體佈局裡，`~ac/lib/...` 對應的就是 `devel/~ac/lib/...`（`ac-lib3/` 是整理後的副本）。所以你在範例裡看到 `REQUIRE x ~ac/lib/...`，可以理解成「載入某個 `ac-lib3` / `devel/~ac` 下的檔案」。
+
+### 一個最小可跑的載入流程
+
+以「我想用模板字串」為例，完整流程通常是：
+
+```forth
+\ 1) 先確保有 locals（很多 ac-lib3 檔案依賴它）
+S" ac-lib3/LOCALS.F" INCLUDED
+
+\ 2) 載入字串模板庫
+S" ac-lib3/STR2.F"   INCLUDED
+
+\ 3) 現在 STR@ / STR+ / STYPE 等字才存在，可以開始用
+: text S" hello" ;
+" before {text} after" STYPE
+```
+
+之後各 library 的範例，都假設你已經用上面任一方式把對應檔案載入了；為了精簡，下面不會在每個範例都重複貼載入指令。
+
+---
+
 ## 4.6 主要 library 細部索引（逐項說明 + example）
 
 這一節把前面提到的主要 library / family 再往下展開：**每個先說它是做什麼，再給至少兩個實際會遇到的例子**。若你是第一次真正打算「拿 `ac-lib3/` 來做事」，這一節會比前面的目錄圖更實用。
+
+> **載入提醒**：以下每個範例都假設你已用 §4.5a 的方式載入對應檔案（例如 `S" ac-lib3/xxx.f" INCLUDED` 或 `REQUIRE word ~ac/lib/xxx.f`）。
 
 ### `LOCALS.F`
 
@@ -551,139 +613,255 @@ S" one two three" S" (\S+)\s+(\S+)\s+(\S+)" PcreGetMatch
 ### `debug/TRACE.F`
 
 **它是做什麼的？**  
-一個非常小、但很有 SPF 特色的 debug helper：透過重新定義 `:`，讓每個新定義的 word 在執行時自動印出自己的名字。
+一個非常小、但很有 SPF 特色的 debug helper。它的核心機制是**重新定義 `:`**：之後你每用 `:` 定義一個新 word，編譯時會自動在該 word 開頭插入「印出自己名字」的程式碼，但只有在 `DEBUG` 旗標為真時才真的印。
+
+實際機制（`ac-lib3/debug/TRACE.F` 全文很短）：
+
+```forth
+VARIABLE DEBUG
+: DebugOn   TRUE  DEBUG ! ;
+: DebugOff  FALSE DEBUG ! ;
+
+: DEBUG.            \ 若 DEBUG 為真就印出字串，否則丟棄
+  DEBUG @ IF (.") SPACE ELSE DROP THEN
+;
+
+: :                 \ 重定義 ':'
+  :                 \   先做原本的 ':'
+  LATEST POSTPONE LITERAL   \   把剛建立 word 的名稱 nt 編成 literal
+  POSTPONE DEBUG.           \   再編一個 DEBUG. 呼叫
+;
+```
+
+關鍵理解：
+
+- `DebugOn` / `DebugOff` 只是切換旗標，**不需要每次重編譯**。
+- 但「插入 trace 程式碼」這件事發生在 `:` **編譯時**；所以**只有在載入 `TRACE.F` 之後才定義的 word**，才會帶有 trace 輸出。`TRACE.F` 載入前就已經存在的 word 不受影響。
 
 **你通常會在什麼情況用它？**
 
-1. 想在 legacy code 裡快速加 trace，而不重寫一堆 logging。  
-2. 想觀察某段程式實際執行到了哪些 word。  
+1. 想在自己的程式裡快速加「執行到哪個 word」的軌跡，而不重寫一堆 logging。  
+2. 想觀察某段程式實際的呼叫序列。  
 3. 想學 SPF 如何攔截 `:` 來做 trace。
 
-**例子**：
-
-- `DebugOn` 後，跑某段程式，觀察 word 呼叫序列。
-- 維護舊服務程式時，快速知道它卡在哪個 word。
-- 當成最小可讀的 trace 實作範例。
-
-**實際 Forth 範例碼**：
+**載入方式**：
 
 ```forth
-DebugOn
+S" ac-lib3/debug/TRACE.F" INCLUDED
 ```
+
+**完整可跑範例 1**（基本用法）：
 
 ```forth
-: TEST-WORD ... ;
+S" ac-lib3/debug/TRACE.F" INCLUDED
+
+DebugOn                 \ 打開 trace
+
+: SQUARE  DUP * ;       \ 在 TRACE.F 之後定義，會帶 trace
+: DEMO    3 SQUARE . ;
+
+DEMO
+\ 執行時會先印出 word 名稱（DEMO / SQUARE），再印出計算結果 9
 ```
 
-> 一旦 `DebugOn`，之後定義並執行的新 word 會經過 `DEBUG.`，把名稱印出來。
+**完整可跑範例 2**（用旗標開關控制是否輸出）：
+
+```forth
+S" ac-lib3/debug/TRACE.F" INCLUDED
+
+: WORK  ... ;           \ 之後定義的 word 都「具備」trace 能力
+
+DebugOff   WORK         \ 不印名稱（安靜執行）
+DebugOn    WORK         \ 印出名稱（追蹤執行）
+```
+
+> 重點：`TRACE.F` 的 trace 是「定義期注入、執行期由旗標決定要不要印」。若你發現某個 word 沒有 trace 輸出，多半是它在 `TRACE.F` 載入**之前**就定義好了。
 
 ### `tools/load_lib.f`
 
 **它是做什麼的？**  
-動態載入 DLL，並走 `WINAPLINK` 把已宣告的 `WINAPI:` 名稱一次 resolve / 回填。
+`LoadInitLibrary ( addr u -- h ior )`：給一個 DLL 路徑字串，它會：
+
+1. 用 `LoadLibraryA` 載入該 DLL；失敗就回傳 `GetLastError`。
+2. 走訪 `WINAPLINK` 鏈（所有已宣告的 `WINAPI:`），把**屬於這個 DLL 的函式名稱**用 `GetProcAddress` 解析，並回填到鏈節點的 proc 欄位。
+
+換句話說，它讓你「先用 `WINAPI:` 宣告一堆 API、稍後再一次把它們綁到實際載入的 DLL」。
 
 **你通常會在什麼情況用它？**
 
 1. plugin DLL 在執行時才決定路徑。  
 2. 想一次性把某個 DLL 裡已宣告的 API 都綁好。  
-3. 想理解 `WINAPLINK` 這套 lazy API binding 怎麼接起來。
+3. 想理解 `WINAPLINK` 這套 API binding 怎麼接起來。
 
-**例子**：
-
-- 啟動時才決定載哪個版本的 DLL。
-- 手動載入一個客製 DLL，然後重綁一批 `WINAPI:` 宣告。
-- 在工具程式中做簡單 plugin loader。
-
-**實際 Forth 範例碼**：
+**載入方式**：
 
 ```forth
-S" myplugin.dll" LoadInitLibrary
+S" ac-lib3/tools/load_lib.f" INCLUDED
 ```
 
+**完整可跑範例 1**（先宣告 API，再一次綁定）：
+
 ```forth
-S" extraapi.dll" LoadInitLibrary DROP
+S" ac-lib3/tools/load_lib.f" INCLUDED
+
+WINAPI: MyPluginInit   MYPLUGIN.DLL   \ 先宣告（此時尚未真正解析位址）
+WINAPI: MyPluginRun    MYPLUGIN.DLL
+
+S" myplugin.dll" LoadInitLibrary      ( -- h ior )
+\ ior=0 表示成功；之後 MyPluginInit / MyPluginRun 就指向真實位址
 ```
+
+**完整可跑範例 2**（只關心成功與否）：
+
+```forth
+S" ac-lib3/tools/load_lib.f" INCLUDED
+
+S" extraapi.dll" LoadInitLibrary      ( -- h ior )
+SWAP DROP                              \ 丟掉 handle，只看 ior
+?DUP IF ." LoadInitLibrary failed: " . CR THEN
+```
+
+> 回傳是 `( h ior )`：`h` 是 DLL handle，`ior` 為 0 表示成功、非 0 表示對應的 `GetLastError`。
 
 ### `tools/dump_winapi.f`
 
 **它是做什麼的？**  
-把 `WINAPLINK` 鏈上的 WinAPI 宣告 dump 出來，方便除錯與 introspection。
+`DUMP-WINAPI`（無參數）走訪整條 `WINAPLINK` 鏈，把每個已宣告的 WinAPI 印成一行，格式大致是：
+
+```
+函式名稱:參數數:DLL名稱
+```
+
+它純粹是 introspection / 除錯工具，不改任何狀態。
 
 **你通常會在什麼情況用它？**
 
-1. 想知道目前有哪些 `WINAPI:` 宣告已經存在。  
-2. 想除錯 DLL/函式名稱綁定是否正確。  
-3. 想快速看某個模組到底依賴哪些 WinAPI。
+1. 想知道目前到底有哪些 `WINAPI:` 宣告已存在。  
+2. 想除錯某個 DLL / 函式名稱綁定是否正確。  
+3. 想快速看某個模組究竟依賴了哪些 WinAPI。
 
-**例子**：
-
-- 在載完模組後執行 `DUMP-WINAPI` 檢查綁定清單。
-- 調查某個 `GetProcAddress` 失敗是不是因為名字拼錯。
-
-**實際 Forth 範例碼**：
+**載入方式**：
 
 ```forth
-DUMP-WINAPI
+S" ac-lib3/tools/dump_winapi.f" INCLUDED
 ```
 
+**完整可跑範例 1**（直接列出目前所有宣告）：
+
 ```forth
-S" kernel32.dll" LoadInitLibrary DROP
+S" ac-lib3/tools/dump_winapi.f" INCLUDED
+
 DUMP-WINAPI
+\ 逐行印出： FuncName:nArgs:DLLNAME
 ```
+
+**完整可跑範例 2**（搭配 `load_lib` 確認綁定）：
+
+```forth
+S" ac-lib3/tools/load_lib.f"    INCLUDED
+S" ac-lib3/tools/dump_winapi.f" INCLUDED
+
+WINAPI: Sleep KERNEL32.DLL
+S" kernel32.dll" LoadInitLibrary DROP   \ 綁定
+DUMP-WINAPI                              \ 檢查 Sleep 是否出現在清單裡
+```
+
+> 如果某個 `GetProcAddress` 解析失敗，先用 `DUMP-WINAPI` 確認名稱拼字與 DLL 名稱是否如你預期。
 
 ### `tools/jmp.f`
 
 **它是做什麼的？**  
-直接在機器碼層 patch 一條 `0xE9 rel32` 跳轉。這是很低階、很 SPF 的工具。
+`JMP ( addr-to addr-from -- )`：在 `addr-from` 處寫入一條 `0xE9 rel32`（near JMP），讓原本在 `addr-from` 的程式碼直接跳到 `addr-to`。這是很低階、很 SPF 的 hot-patch 工具。
+
+實作非常短（`ac-lib3/tools/jmp.f`）：
+
+```forth
+HEX
+: JMP ( addr-to addr-from -- )
+  >R
+  0E9 R@ C!                 \ 在 addr-from 寫入 JMP opcode
+  R@ 1+ CELL+ - R> 1+ !     \ 寫入相對位移 rel32
+;
+DECIMAL
+```
+
+典型用法是把「舊 word 的入口」改跳到「新 word 的入口」：`' NEW-WORD ' OLD-WORD JMP`。
 
 **你通常會在什麼情況用它？**
 
-1. 想 hot-patch 一個既有 word 到另一個位址。  
-2. 想做 compiler instrumentation / interception。  
-3. 想學 SPF 怎麼在 runtime 改 code stream。
+1. 想 hot-patch 一個既有 word，讓它改走新實作（不必重編譯所有呼叫端）。  
+2. 想做 compiler instrumentation / interception（例如攔截 `COMPILE,` / `LIT,`）。  
+3. 想學 SPF 怎麼在 runtime 直接改 code stream。
 
-**例子**：
-
-- 把某個既有 primitive 改跳到測試版實作。
-- 作為 `tools/map.f` 的底層基礎，攔截 `COMPILE,` / `LIT,`。
-
-**實際 Forth 範例碼**：
+**載入方式**：
 
 ```forth
+S" ac-lib3/tools/jmp.f" INCLUDED
+```
+
+**完整可跑範例 1**（把舊 word 重導到新實作）：
+
+```forth
+S" ac-lib3/tools/jmp.f" INCLUDED
+
+: OLD-HELLO  ." old" CR ;
+: NEW-HELLO  ." new" CR ;
+
+' NEW-HELLO ' OLD-HELLO JMP   \ 之後呼叫 OLD-HELLO 會執行 NEW-HELLO
+
+OLD-HELLO                      \ 印出 new
+```
+
+**完整可跑範例 2**（攔截編譯器原語，這正是 `map.f` 的底層）：
+
+```forth
+S" ac-lib3/tools/jmp.f" INCLUDED
+
+\ 假設你已定義 NEW-COMPILE, / NEW-LIT,（見 tools/map.f）
 ' NEW-COMPILE, ' COMPILE, JMP
+' NEW-LIT,     ' LIT,     JMP
 ```
 
-```forth
-' NEW-LIT, ' LIT, JMP
-```
+> 注意：`JMP` 是直接改機器碼，屬於進階/危險操作；patch 錯位址會讓系統不穩。它最常見的「正當用途」就是 `map.f` 那種 compiler instrumentation。
 
 ### `tools/map.f`
 
 **它是做什麼的？**  
-這是編譯器插樁工具：透過 `jmp.f` 改寫 `COMPILE,` 和 `LIT,`，讓編譯時把 reference map 印出來。
+這是編譯器插樁工具：它先 `REQUIRE JMP ~ac/lib/tools/jmp.f`，然後用 `JMP` 把 `COMPILE,` 和 `LIT,` 改寫成自己的 `NEW-COMPILE,` / `NEW-LIT,`。之後**每次編譯一個 reference 時**，就會經過 `ADD-TO-MAP` 印出一行（包含 `HERE`、xt、以及用 `WordByAddr`/`SFIND` 反查到的 word 名稱）。
+
+也就是說：載入 `map.f` 之後，**接下來編譯的程式碼會邊編譯邊印出 reference map**。它本質上是一個「載入即啟動」的 compiler 監控工具，這也是為什麼它被歸類為實驗性質——它會改動全域的 `COMPILE,` / `LIT,` 行為。
 
 **你通常會在什麼情況用它？**
 
-1. 想看大型專案裡誰編譯了誰。  
+1. 想看大型專案裡「誰編譯/引用了誰」。  
 2. 想 debug 交叉參照或 dependency map。  
 3. 想學 SPF 的 hot-patch compiler 技巧。
 
-**例子**：
-
-- 產生簡易 call/reference map。
-- 找出某個 word 為什麼會被編進映像。
-- 研究 compiler hook 的實作技巧。
-
-**實際 Forth 範例碼**：
+**載入方式**（注意：載入後會立刻開始 instrument 編譯流程）：
 
 ```forth
-' NEW-COMPILE, ' COMPILE, JMP
-' NEW-LIT, ' LIT, JMP
+S" ac-lib3/tools/map.f" INCLUDED
 ```
 
+**完整可跑範例 1**（載入後編譯任何東西都會印 map）：
+
 ```forth
-ZZZ 6 0 DO TEST ['] TEST 2DROP LOOP [ ' TEST 1+ ] LITERAL ;
+S" ac-lib3/tools/map.f" INCLUDED
+
+\ 從這裡開始，編譯時就會逐行印出 reference map
+: DEMO  1 2 + . ;
+\ 編譯 DEMO 的過程會印出每個被編進去的 reference（如 + 與 . 等）
 ```
+
+**完整可跑範例 2**（map.f 內附的自我測試字）：
+
+```forth
+S" ac-lib3/tools/map.f" INCLUDED
+
+ZZZ          \ map.f 內定義了 ZZZ 作為示範，執行可看到 instrument 效果
+```
+
+> 提醒：`map.f` 屬於「全域改寫 compiler」的工具，會影響之後**所有**編譯動作。除錯完通常會在乾淨的 session 重新載入系統，而不是繼續沿用被 instrument 過的環境。
 
 ### `list/STR_LIST.F`
 
