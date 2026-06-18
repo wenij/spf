@@ -1,6 +1,6 @@
 # SP-Forth/4 原始碼追蹤 — `ac-lib3/` 延伸函式庫導覽
 
-> 定位：這一章不追 kernel / compiler 本體，而是介紹 repo 內另一塊很實用、但容易被忽略的資產：`ac-lib3/`。
+> 定位：本章不追 kernel / compiler 本體，而是介紹 repo 內另一塊很實用、但容易被忽略的資產：`ac-lib3/`。
 >
 > 如果 `src/` 是 SPF 本體，`ac-lib3/` 更像是 **應用開發時可直接拿來用的函式庫與工具箱**。
 
@@ -14,7 +14,7 @@
 - 字串與文字處理工具
 - Windows API / 系統整合函式庫
 - 除錯 / 記憶體 / 小工具
-- 社群累積的 reusable library
+- 社群累積的可重用函式庫
 
 從檔頭註解與命名慣例看，這一區主要是 **Andrey Cherezov（`~ac`）** 與其它 SPF 社群作者（特別是 **Ruvim Pinka** 等）在 1997–2003 年間累積的應用層函式庫。目錄中的註解大量使用 **CP1251 俄文編碼**，因此若直接用 UTF-8 工具打開原檔，常會看到亂碼；閱讀時要有這個心理準備。
 
@@ -30,13 +30,13 @@
 
 ## 2. 目錄地圖：`ac-lib3/` 裡大概有什麼？
 
-從 top-level 結構可以先把它分成幾個大類：
+從頂層結構可以先把它分成幾個大類：
 
 ```forth
 ac-lib3/
 ├── LOCALS.F / TEMPS.F / REQUIRE.F    ← 語言延伸與載入輔助
 ├── STR.F / STR2.F / STR3.F / str4.f  ← 字串模板 / 內插系列
-├── string/                           ← regexp、MIME、大小寫、參數剖析等
+├── string/                           ← 正規表示式、MIME、大小寫、參數剖析等
 ├── win/                              ← Windows API 與系統整合
 ├── memory/                           ← 記憶體相關工具
 ├── debug/TRACE.F                     ← 除錯追蹤輔助
@@ -47,14 +47,14 @@ ac-lib3/
 
 如果只想先抓大方向，可以把它記成下面這句：
 
-- **top-level 單檔**：偏語言延伸 / 字串模板 / 入口工具
+- **頂層單檔**：偏語言延伸 / 字串模板 / 入口工具
 - **`string/`**：偏文字與內容處理
 - **`win/`**：偏 Windows 系統整合
 - **`tools/` / `debug/` / `memory/`**：偏輔助工具
 
 ---
 
-## 3. 幾個最值得先看的 top-level 檔案
+## 3. 幾個最值得先看的頂層檔案
 
 ### 3.1 `LOCALS.F` — locals 語法擴充
 
@@ -122,7 +122,18 @@ ac-lib3/
 - `STR3.F`：再往前多加 `%WORD` / `%I` / `%J` 這類巨集槽
 - `str4.f`：再往下接上自訂記憶體管理（`SALLOCATE` / `FREESTR`）
 
+其中要特別分清楚：一般用 `"` / `STRBUF` 建出來的動態字串，正常釋放 API 是 `STRFREE`；`FREESTR` 則比較像搭配 `heap_enum.f` 做 heap 掃描 / 清理的工具，不是日常成對使用的 free 函式。
+
 也就是說，這不是「你應該全部一起用」的四套庫，而是「你應該挑一個與當前程式風格最相容的版本」。
+
+快速選擇可以這樣抓：
+
+| 需求 | 優先看 |
+|------|--------|
+| 維護較舊、依賴 `TEMPS.F` 的程式 | `STR.F` |
+| 一般模板字串 / 動態字串 | `STR2.F` |
+| 需要 `%WORD`、`%I`、`%J` 這類巨集槽 | `STR3.F` |
+| 想研究自訂 allocation、heap 掃描與 STR buffer 清理 | `str4.f` |
 
 檔頭說明直接提到它們想提供比較接近 **Perl / PHP 風格**的字串能力，例如：
 
@@ -184,7 +195,7 @@ ac-lib3/
 
 - 模板字串
 - MIME / 郵件內容解碼
-- regexp（PCRE wrapper）
+- 正規表示式（PCRE wrapper）
 - 參數剖析
 - 大小寫轉換
 
@@ -256,20 +267,20 @@ ac-lib3/
 
 **典型用途**：
 
-1. 想加 trace / debug 輔助輸出
+1. 想加 trace / 除錯輔助輸出
 2. 想列舉 / 探查 heap 或記憶體狀態
 3. 想做 WinAPI 清單整理或載入 helper
 
 **例子**：
 
-- `debug/TRACE.F`：程式追蹤 / debug print helper
+- `debug/TRACE.F`：程式追蹤 / 除錯輸出 helper
 - `tools/load_lib.f`：動態載入小工具
 - `tools/dump_winapi.f`：WinAPI 相關資料整理
 - `memory/heap_enum.f`：heap enumeration 類工具
 
 其中有兩個特別值得點名：
 
-- `tools/map.f`：不是一般 utility，而是會 **hot-patch `COMPILE,` / `LIT,`** 的插樁工具，屬於非常 SPF 味的「編譯期黑魔法」
+- `tools/map.f`：不是一般工具，而是會 **hot-patch `COMPILE,` / `LIT,`** 的插樁工具，屬於非常 SPF 味的「編譯期黑魔法」
 - `res_ctrl.f`：偏 **Eserv2 專案** 的 resource tracking 模式，適合拿來學如何做多執行緒資源表，但不一定適合直接搬進一般專案
 
 ### 4.5 翻譯 / 規則 / 小型專題：`transl/`、`list/`、`mbox/`、`util/`
@@ -289,9 +300,14 @@ ac-lib3/
 
 ---
 
-## 4.5a 如何載入 `ac-lib3/` 的 library？
+## 4.6 如何載入 `ac-lib3/` 的 library？
 
-在看下一節各 library 的範例之前，先搞懂「**怎麼把它載進來**」很重要——否則範例裡的字（如 `STR@`、`RG_OpenKey`、`PcreMatch`）根本還不存在。`ac-lib3/` 主要有兩種載入方式。
+在實際使用各 library 之前，先搞懂「**怎麼把它載進來**」很重要；否則範例裡的字（如 `STR@`、`RG_OpenKey`、`PcreMatch`）根本還不存在。`ac-lib3/` 主要有兩種載入方式。
+
+先提醒一個容易踩到的前提：很多 `ac-lib3/` 檔案不是完全獨立的單檔，它們開頭就會寫 `REQUIRE ... ~ac/lib/...`。因此「直接 `INCLUDED` 某個檔案」通常還隱含兩件事：
+
+1. 目前 SPF session 裡已經有 `REQUIRE` / `REQUIRED`。
+2. `~ac/lib/...` 這類作者路徑能透過 module / library 搜尋路徑找到對應檔案。
 
 ### 方式 A：用 SP-Forth 內建的 `INCLUDED`（最直接）
 
@@ -307,9 +323,9 @@ S" ac-lib3/string/regexp.f" INCLUDED
 
 `spf_module.f` 的模組搜尋路徑（見 [05-io-error-init.md](05-io-error-init.md) 的 `+LibraryDirName`）會把相對路徑接到「**可執行檔目錄 + `/devel/`**」之下，因此在某些建構配置裡，`~ac/lib/...` 風格的路徑會被解析到 `devel/~ac/lib/...`（也就是 `ac-lib3/` 的母樹，見 [17-devel.md](17-devel.md)）。
 
-### 方式 B：用 `ac-lib3` 自帶的 `REQUIRE`（去重 + 路徑慣例）
+### 方式 B：用 `REQUIRE`（去重 + 路徑慣例）
 
-`ac-lib3/REQUIRE.F` 提供 `REQUIRE` / `REQUIRED`，這也是 `ac-lib3` 內部檔案彼此相依時最常見的寫法：
+SPF4 本體已經有 `REQUIRE` / `REQUIRED`，而 `ac-lib3/REQUIRE.F` 則保留了一份早期、獨立的 require 實作。兩者核心概念相同：用一個代表 word 判斷 library 是否已載入，避免重複載入。這也是 `ac-lib3` 內部檔案彼此相依時最常見的寫法：
 
 ```forth
 S" ac-lib3/REQUIRE.F" INCLUDED   \ 先載入 REQUIRE 機制本身
@@ -319,7 +335,7 @@ REQUIRE RG_OpenKey ~ac/lib/win/registry.f
 它的語意是：
 
 - `REQUIRE word libpath`
-  - 先 `FIND` 看 `word` 是否已存在
+  - 先查字典，看 `word` 是否已存在
   - 已存在 → 什麼都不做（**去重**，避免重複載入）
   - 不存在 → 載入 `libpath`
 - 也可以用字串形式：
@@ -327,1060 +343,41 @@ REQUIRE RG_OpenKey ~ac/lib/win/registry.f
   S" RG_OpenKey" S" ~ac/lib/win/registry.f" REQUIRED
   ```
 
-> **路徑代號小提醒**：`ac-lib3/` 原始檔內部大量使用 `~ac/lib/...`、`~yz/lib/...` 這種「作者路徑代號」。在這個 repo 的實體佈局裡，`~ac/lib/...` 對應的就是 `devel/~ac/lib/...`（`ac-lib3/` 是整理後的副本）。所以你在範例裡看到 `REQUIRE x ~ac/lib/...`，可以理解成「載入某個 `ac-lib3` / `devel/~ac` 下的檔案」。
+> **路徑代號小提醒**：`ac-lib3/` 原始檔內部大量使用 `~ac/lib/...`、`~yz/lib/...` 這種「作者路徑代號」。在這個 repo 的實體佈局裡，`~ac/lib/...` 對應的主要是 `devel/~ac/lib/...`（`ac-lib3/` 是整理後的副本）。所以你在範例裡看到 `REQUIRE x ~ac/lib/...`，可以理解成「載入某個 `devel/~ac` 作者母樹下的檔案；而這份 repo 也另外保留了一份整理到 `ac-lib3/` 的副本」。
+
+### 環境前提小抄
+
+使用 `ac-lib3/` 時，最好先把下面幾個前提放在心裡：
+
+| 前提 | 影響 |
+|------|------|
+| Win32 偏重 | `win/`、`memory/`、`tools/` 裡很多檔案直接呼叫 `KERNEL32.DLL`、`ADVAPI32.DLL`、`USER32.DLL` 等 Windows API |
+| 外部 DLL | `string/regexp.f` 需要 `pcre.dll`，`string/bregexp/bregexp.f` 需要 `BREGEXP.DLL`，`win/arc/gzip/zlib.f` 需要 `zlib.dll` |
+| 作者路徑 | `REQUIRE ... ~ac/lib/...` 通常期待 module/library path 能找到 `devel/~ac/lib/...` |
+| 原檔編碼 | 註解多為 CP1251 俄文，UTF-8 工具直接打開常會看到亂碼 |
 
 ### 一個最小可跑的載入流程
 
-以「我想用模板字串」為例，完整流程通常是：
+以「我想用模板字串」為例，在已經能解析 `~ac/lib/...` 路徑的 SPF4 環境裡，完整流程通常是：
 
 ```forth
-\ 1) 先確保有 locals（很多 ac-lib3 檔案依賴它）
-S" ac-lib3/LOCALS.F" INCLUDED
+\ STR2.F 自己會 REQUIRE { ~ac/lib/locals.f
+S" ac-lib3/STR2.F" INCLUDED
 
-\ 2) 載入字串模板庫
-S" ac-lib3/STR2.F"   INCLUDED
-
-\ 3) 現在 STR@ / STR+ / STYPE 等字才存在，可以開始用
+\ 現在 STR@ / STR+ / STYPE 等字才存在，可以開始用
 : text S" hello" ;
 " before {text} after" STYPE
 ```
 
-之後各 library 的範例，都假設你已經用上面任一方式把對應檔案載入了；為了精簡，下面不會在每個範例都重複貼載入指令。
+如果你的環境無法解析 `~ac/lib/...`，就要先調整 library path，或改用對應的實體路徑手動載入依賴。之後各 library 的範例，都假設你已經用上面任一方式把對應檔案與其依賴載入了；為了精簡，下面不會在每個範例都重複貼載入指令。
 
 ---
 
-## 4.6 主要 library 細部索引（逐項說明 + example）
+## 4.7 詳細用法索引已拆分
 
-這一節把前面提到的主要 library / family 再往下展開：**每個先說它是做什麼，再給至少兩個實際會遇到的例子**。若你是第一次真正打算「拿 `ac-lib3/` 來做事」，這一節會比前面的目錄圖更實用。
+本章只保留 `ac-lib3/` 的地圖與閱讀路線；逐項 library 說明、載入範例與堆疊效果備註已移到 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md)。
 
-> **載入提醒**：以下每個範例都假設你已用 §4.5a 的方式載入對應檔案（例如 `S" ac-lib3/xxx.f" INCLUDED` 或 `REQUIRE word ~ac/lib/xxx.f`）。
-
-### `LOCALS.F`
-
-**它是做什麼的？**  
-提供 SPF 裡的 locals 語法擴充，讓你可以在 colon definition 一開始宣告具名局部變數，減少大量 `SWAP` / `OVER` / `ROT` 導致的可讀性下降。
-
-**你通常會在什麼情況用它？**
-
-1. 你有一段數值或字串處理邏輯，堆疊 juggling 已經多到自己都難追。  
-2. 你在維護舊 SPF 應用，想把 stack-heavy 的 code 改寫得比較像可維護的程式。  
-3. 你在讀 `ac-lib3/` 其它比較新的檔案（例如 `registry2.f`、`STR2.F`），常會先看到 `REQUIRE { ~ac/lib/locals.f`。
-
-**例子**：
-
-- 把 `: FOO ( a b c -- ) OVER + SWAP ... ;` 改寫成使用具名區域變數的版本，讓資料流更明確。
-- 在 `DO ... LOOP` 或 callback 邏輯中保留一些中間值，不必反覆從堆疊重新排列。
-- 讀到 `{: ... :}` / `{ a b \ c -- }` 這類寫法時，用 `LOCALS.F` 對照其語意。
-
-**實際 Forth 範例碼**（來自檔頭示例）：
-
-```forth
-: TEST { a b c d \ e f -- }
-  a . b . c .
-  b c + -> e
-  e . f .
-  ^ a @ .
-;
-```
-
-```forth
-: TEST { a b -- }
-  a . b . CR
-  5 0 DO I . a . b . CR LOOP
-;
-```
-
-### `TEMPS.F`
-
-**它是做什麼的？**  
-`TEMPS.F` 是較舊的一代 temp / locals 方案，提供 `| ... |`、`(( ... ))`、`|| ... ||` 等語法，讓你能建立短期暫存值與類 VALUE 風格的臨時變數。
-
-**你通常會在什麼情況用它？**
-
-1. 你在讀較舊的 `ac-lib3/` 程式（例如 `STR.F`、`REGISTRY.F`、部分 `window/` 模組），發現它們不是用 `LOCALS.F`。  
-2. 你想理解 SPF 生態從舊 temp 機制過渡到較新 locals 機制的歷史軌跡。  
-3. 你只想放幾個短暫中間值，不想引入完整 locals 風格。
-
-**例子**：
-
-- 在較舊檔案裡看到 `|| h ||` 或 `(( a b ))` 時，用 `TEMPS.F` 理解它在做什麼。
-- 維護 `STR.F` 這類依賴 `TEMPS.F` 的舊版模板字串實作。
-- 比較 `TEMPS.F` 與 `LOCALS.F` 的寫法差異，決定舊專案要不要遷移。
-
-**實際 Forth 範例碼**（依語法風格整理）：
-
-```forth
-| tmp count |
-... 
-123 -> tmp
-tmp .
-```
-
-```forth
-(( a b c ))
-...
-```
-
-> `TEMPS.F` 本身不像 `LOCALS.F` 那樣附完整示範程式，但 `|`、`(( ))`、`->` 的定義已清楚顯示這套用法；讀較舊的 `STR.F`、`REGISTRY.F`、`WINDOW.F` 時通常會先碰到它。
-
-### `REQUIRE.F`
-
-**它是做什麼的？**  
-提供 `REQUIRE` / `REQUIRED` 風格的載入機制：避免重複載入、組合 library path，並依序嘗試 local path / 預設 library path / web path。
-
-**你通常會在什麼情況用它？**
-
-1. 想知道 `~ac/lib/...` 這套 require 慣例是怎麼運作的。  
-2. 想理解 SPF 生態早期如何管理「按需載入」的外部函式庫。  
-3. 想追某個 `ac-lib3/` 檔案的依賴鏈，通常會先從它的 `REQUIRE` 列表開始。
-
-**例子**：
-
-- 讀到 `REQUIRE COMPARE-U ~ac/lib/string/compare-u.f` 時，知道這不只是 include，而是帶有去重與路徑處理的載入。
-- 想手動在 SPF project 中導入某個 `ac-lib3` 模組，會先學 `REQUIRE` 的用法。
-- 想理解為什麼 `WebLibPath` 這類設計存在（雖然目前 web branch 未實作）。
-
-**實際 Forth 範例碼**：
-
-```forth
-REQUIRE COMPARE-U ~ac/lib/string/compare-u.f
-```
-
-```forth
-S" COMPARE-U" S" ~ac/lib/string/compare-u.f" REQUIRED
-```
-
-### `STR.F` / `STR2.F` / `STR3.F` / `str4.f`
-
-**它們是做什麼的？**  
-這是一整個「動態字串 / 模板字串」家族：目標是提供接近 Perl / PHP 風格的 `"...{expr}..."` 字串內插能力。它們不是四個獨立功能庫，而是同一主題的演進版本。
-
-**你通常會在什麼情況用它們？**
-
-1. 想產生 HTTP / SMTP / CGI / mail 這類大量文字輸出的應用。  
-2. 想把某個 word 的輸出直接嵌進模板，而不是手工 `TYPE` / `HOLD`。  
-3. 想比較 SPF 生態裡 `TEMPS` 與 `LOCALS` 風格在同一問題上的寫法差異。
-
-**例子**：
-
-- 組一個帶變數內插的 HTTP response body。
-- 建一段包含 `{CRLF}`、`{word}`、`{FILE ...}` 的 mail / CGI 模板。
-- 想選擇版本時：舊碼偏 `STR.F`，較新風格偏 `STR2.F` / `STR3.F` / `str4.f`。
-
-**實際 Forth 範例碼**（來自原檔註解）：
-
-```forth
-: text S" hello" ;
-" before {text} after" STYPE
-```
-
-```forth
-" abc{TEST}123 5+5={5 5 +} Ok" STYPE CR
-```
-
-```forth
-: TEST2
-  " abc{TEST}123 5+5={5 5 +} Ok {ZZZ} OK!"
-  STYPE CR
-;
-```
-
-### `string/CONV.F`
-
-**它是做什麼的？**  
-提供一大包通用字串/編碼轉換工具：base64、KOI8-R ↔ Windows-1251、URL `%xx` 轉換、把 query-string / token stream 轉成 blank-delimited 形式等。
-
-**你通常會在什麼情況用它？**
-
-1. 郵件、HTTP、URL 參數、俄文字元編碼處理。  
-2. 想把非空白分隔的輸入改造成 parser 易讀的形式。  
-3. 想做 base64 encode/decode，而不想自己重寫。
-
-**例子**：
-
-- 把一段 base64 資料 decode 回 addr/u。
-- 把 URL query string 中的 `%20` / `%3A` 還原。
-- 把 KOI8-R 文本轉成 Windows-1251，以便和 Windows API 或舊資料互通。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" SGVsbG8=" debase64
-```
-
-```forth
-S" a%20b%3Ac" CONVERT%
-```
-
-### `string/get_params.f`
-
-**它是做什麼的？**  
-專做 `name=value&x=y` 這類 query-string / form parameter 的解析與查詢。
-
-**你通常會在什麼情況用它？**
-
-1. CGI / HTTP form 參數處理。  
-2. 想從一串 URL-style 參數快速查出特定 key。  
-3. 想 dump / iterate 整個參數集合。
-
-**例子**：
-
-- 解析 `error_code=10060&from=http://10.1.1.11/`，再用 `GetParam` 取特定欄位。
-- 先 `GetParamsFromString`，後續用 `IsSet` 判斷某個參數有沒有帶。
-- 用 `DumpParams` 快速看整串參數 parse 結果。
-
-**實際 Forth 範例碼**（檔頭已有示例）：
-
-```forth
-S" error_code=10060&from=http://10.1.1.11/" GetParamsFromString
-```
-
-```forth
-S" error_code" GetParam
-```
-
-### `string/mime-decode.f`
-
-**它是做什麼的？**  
-處理 MIME / mail header 的 encoded text（RFC 2045 / 2047 / 2231），尤其適合郵件與 HTTP 文字內容解碼。
-
-**你通常會在什麼情況用它？**
-
-1. 郵件標頭出現 `=?charset?...?=` 形式的編碼字串。  
-2. 想處理 quoted-printable / base64 兩種常見 mail encoding。  
-3. 想把 KOI8-R / Windows-1251 等俄文相關 charset 正常還原。
-
-**例子**：
-
-- 解 `Subject: =?windows-1251?B?...?=` 類型的 mail 標頭。
-- 把 folded header（跨行 header）先 `StripLwsp` 再 decode。
-- 在郵件 parser 裡把 charset decoder 掛進 `CHARSET-DECODERS` 詞彙表。
-
-**實際 Forth 範例碼**（原檔註解示意）：
-
-```forth
-" STR@ StripLwsp MimeValueDecode ANSI>OEM TYPE
-```
-
-```forth
-S" =?windows-1251?B?...?=" MimeValueDecode
-```
-
-### `string/regexp.f`
-
-**它是做什麼的？**  
-這是 PCRE wrapper，提供 Perl 風格正規表示式能力，是 `ac-lib3/string/` 裡最強大的 pattern matching 工具之一。
-
-**你通常會在什麼情況用它？**
-
-1. 想抓取字串中的結構化片段。  
-2. 想一次取出多個 capture groups。  
-3. 想在 SPF 中直接用現代 regexp，而不是自己手寫 parser。
-
-**例子**：
-
-- 用 `PcreMatch` 做簡單 yes/no 模式比對。
-- 用 `PcreGetMatch` 把 `(\S+)\s+(\S+)` 這類 capture group 全部拉出來。
-- 在 mail / CGI / config parser 前先用 regexp 過濾格式。
-
-**實際 Forth 範例碼**（檔頭註解已有）：
-
-```forth
-S" PcReIsRULEZZ:)" S" ^P(.+)Z" PcreMatch .
-```
-
-```forth
-S" one two three" S" (\S+)\s+(\S+)\s+(\S+)" PcreGetMatch
-```
-
-### `string/bregexp/bregexp.f`
-
-**它是做什麼的？**  
-另一套 regexp 路線，依賴同目錄附帶的 `BREGEXP.DLL`。與 `regexp.f`（PCRE）相比，它更像是另一個外部 regex engine 的 binding。
-
-**你通常會在什麼情況用它？**
-
-1. 已經有 `BREGEXP.DLL` 環境，想直接重用。  
-2. 想比較 PCRE 與另一套 regexp engine 的用法或效能。  
-3. 在維護歷史專案時發現它原本就依賴 BRegexp。
-
-**例子**：
-
-- 用 `BregexpMatch` 做快速比對。
-- 用 `BregexpGetMatch` 取 match 結果。
-- 在 Windows-only 環境下，維護依賴 `BREGEXP.DLL` 的舊工具。
-
-### `debug/TRACE.F`
-
-**它是做什麼的？**  
-一個非常小、但很有 SPF 特色的 debug helper。它的核心機制是**重新定義 `:`**：之後你每用 `:` 定義一個新 word，編譯時會自動在該 word 開頭插入「印出自己名字」的程式碼，但只有在 `DEBUG` 旗標為真時才真的印。
-
-實際機制（`ac-lib3/debug/TRACE.F` 全文很短）：
-
-```forth
-VARIABLE DEBUG
-: DebugOn   TRUE  DEBUG ! ;
-: DebugOff  FALSE DEBUG ! ;
-
-: DEBUG.            \ 若 DEBUG 為真就印出字串，否則丟棄
-  DEBUG @ IF (.") SPACE ELSE DROP THEN
-;
-
-: :                 \ 重定義 ':'
-  :                 \   先做原本的 ':'
-  LATEST POSTPONE LITERAL   \   把剛建立 word 的名稱 nt 編成 literal
-  POSTPONE DEBUG.           \   再編一個 DEBUG. 呼叫
-;
-```
-
-關鍵理解：
-
-- `DebugOn` / `DebugOff` 只是切換旗標，**不需要每次重編譯**。
-- 但「插入 trace 程式碼」這件事發生在 `:` **編譯時**；所以**只有在載入 `TRACE.F` 之後才定義的 word**，才會帶有 trace 輸出。`TRACE.F` 載入前就已經存在的 word 不受影響。
-
-**你通常會在什麼情況用它？**
-
-1. 想在自己的程式裡快速加「執行到哪個 word」的軌跡，而不重寫一堆 logging。  
-2. 想觀察某段程式實際的呼叫序列。  
-3. 想學 SPF 如何攔截 `:` 來做 trace。
-
-**載入方式**：
-
-```forth
-S" ac-lib3/debug/TRACE.F" INCLUDED
-```
-
-**完整可跑範例 1**（基本用法）：
-
-```forth
-S" ac-lib3/debug/TRACE.F" INCLUDED
-
-DebugOn                 \ 打開 trace
-
-: SQUARE  DUP * ;       \ 在 TRACE.F 之後定義，會帶 trace
-: DEMO    3 SQUARE . ;
-
-DEMO
-\ 執行時會先印出 word 名稱（DEMO / SQUARE），再印出計算結果 9
-```
-
-**完整可跑範例 2**（用旗標開關控制是否輸出）：
-
-```forth
-S" ac-lib3/debug/TRACE.F" INCLUDED
-
-: WORK  ... ;           \ 之後定義的 word 都「具備」trace 能力
-
-DebugOff   WORK         \ 不印名稱（安靜執行）
-DebugOn    WORK         \ 印出名稱（追蹤執行）
-```
-
-> 重點：`TRACE.F` 的 trace 是「定義期注入、執行期由旗標決定要不要印」。若你發現某個 word 沒有 trace 輸出，多半是它在 `TRACE.F` 載入**之前**就定義好了。
-
-### `tools/load_lib.f`
-
-**它是做什麼的？**  
-`LoadInitLibrary ( addr u -- h ior )`：給一個 DLL 路徑字串，它會：
-
-1. 用 `LoadLibraryA` 載入該 DLL；失敗就回傳 `GetLastError`。
-2. 走訪 `WINAPLINK` 鏈（所有已宣告的 `WINAPI:`），把**屬於這個 DLL 的函式名稱**用 `GetProcAddress` 解析，並回填到鏈節點的 proc 欄位。
-
-換句話說，它讓你「先用 `WINAPI:` 宣告一堆 API、稍後再一次把它們綁到實際載入的 DLL」。
-
-**你通常會在什麼情況用它？**
-
-1. plugin DLL 在執行時才決定路徑。  
-2. 想一次性把某個 DLL 裡已宣告的 API 都綁好。  
-3. 想理解 `WINAPLINK` 這套 API binding 怎麼接起來。
-
-**載入方式**：
-
-```forth
-S" ac-lib3/tools/load_lib.f" INCLUDED
-```
-
-**完整可跑範例 1**（先宣告 API，再一次綁定）：
-
-```forth
-S" ac-lib3/tools/load_lib.f" INCLUDED
-
-WINAPI: MyPluginInit   MYPLUGIN.DLL   \ 先宣告（此時尚未真正解析位址）
-WINAPI: MyPluginRun    MYPLUGIN.DLL
-
-S" myplugin.dll" LoadInitLibrary      ( -- h ior )
-\ ior=0 表示成功；之後 MyPluginInit / MyPluginRun 就指向真實位址
-```
-
-**完整可跑範例 2**（只關心成功與否）：
-
-```forth
-S" ac-lib3/tools/load_lib.f" INCLUDED
-
-S" extraapi.dll" LoadInitLibrary      ( -- h ior )
-SWAP DROP                              \ 丟掉 handle，只看 ior
-?DUP IF ." LoadInitLibrary failed: " . CR THEN
-```
-
-> 回傳是 `( h ior )`：`h` 是 DLL handle，`ior` 為 0 表示成功、非 0 表示對應的 `GetLastError`。
-
-### `tools/dump_winapi.f`
-
-**它是做什麼的？**  
-`DUMP-WINAPI`（無參數）走訪整條 `WINAPLINK` 鏈，把每個已宣告的 WinAPI 印成一行，格式大致是：
-
-```
-函式名稱:參數數:DLL名稱
-```
-
-它純粹是 introspection / 除錯工具，不改任何狀態。
-
-**你通常會在什麼情況用它？**
-
-1. 想知道目前到底有哪些 `WINAPI:` 宣告已存在。  
-2. 想除錯某個 DLL / 函式名稱綁定是否正確。  
-3. 想快速看某個模組究竟依賴了哪些 WinAPI。
-
-**載入方式**：
-
-```forth
-S" ac-lib3/tools/dump_winapi.f" INCLUDED
-```
-
-**完整可跑範例 1**（直接列出目前所有宣告）：
-
-```forth
-S" ac-lib3/tools/dump_winapi.f" INCLUDED
-
-DUMP-WINAPI
-\ 逐行印出： FuncName:nArgs:DLLNAME
-```
-
-**完整可跑範例 2**（搭配 `load_lib` 確認綁定）：
-
-```forth
-S" ac-lib3/tools/load_lib.f"    INCLUDED
-S" ac-lib3/tools/dump_winapi.f" INCLUDED
-
-WINAPI: Sleep KERNEL32.DLL
-S" kernel32.dll" LoadInitLibrary DROP   \ 綁定
-DUMP-WINAPI                              \ 檢查 Sleep 是否出現在清單裡
-```
-
-> 如果某個 `GetProcAddress` 解析失敗，先用 `DUMP-WINAPI` 確認名稱拼字與 DLL 名稱是否如你預期。
-
-### `tools/jmp.f`
-
-**它是做什麼的？**  
-`JMP ( addr-to addr-from -- )`：在 `addr-from` 處寫入一條 `0xE9 rel32`（near JMP），讓原本在 `addr-from` 的程式碼直接跳到 `addr-to`。這是很低階、很 SPF 的 hot-patch 工具。
-
-實作非常短（`ac-lib3/tools/jmp.f`）：
-
-```forth
-HEX
-: JMP ( addr-to addr-from -- )
-  >R
-  0E9 R@ C!                 \ 在 addr-from 寫入 JMP opcode
-  R@ 1+ CELL+ - R> 1+ !     \ 寫入相對位移 rel32
-;
-DECIMAL
-```
-
-典型用法是把「舊 word 的入口」改跳到「新 word 的入口」：`' NEW-WORD ' OLD-WORD JMP`。
-
-**你通常會在什麼情況用它？**
-
-1. 想 hot-patch 一個既有 word，讓它改走新實作（不必重編譯所有呼叫端）。  
-2. 想做 compiler instrumentation / interception（例如攔截 `COMPILE,` / `LIT,`）。  
-3. 想學 SPF 怎麼在 runtime 直接改 code stream。
-
-**載入方式**：
-
-```forth
-S" ac-lib3/tools/jmp.f" INCLUDED
-```
-
-**完整可跑範例 1**（把舊 word 重導到新實作）：
-
-```forth
-S" ac-lib3/tools/jmp.f" INCLUDED
-
-: OLD-HELLO  ." old" CR ;
-: NEW-HELLO  ." new" CR ;
-
-' NEW-HELLO ' OLD-HELLO JMP   \ 之後呼叫 OLD-HELLO 會執行 NEW-HELLO
-
-OLD-HELLO                      \ 印出 new
-```
-
-**完整可跑範例 2**（攔截編譯器原語，這正是 `map.f` 的底層）：
-
-```forth
-S" ac-lib3/tools/jmp.f" INCLUDED
-
-\ 假設你已定義 NEW-COMPILE, / NEW-LIT,（見 tools/map.f）
-' NEW-COMPILE, ' COMPILE, JMP
-' NEW-LIT,     ' LIT,     JMP
-```
-
-> 注意：`JMP` 是直接改機器碼，屬於進階/危險操作；patch 錯位址會讓系統不穩。它最常見的「正當用途」就是 `map.f` 那種 compiler instrumentation。
-
-### `tools/map.f`
-
-**它是做什麼的？**  
-這是編譯器插樁工具：它先 `REQUIRE JMP ~ac/lib/tools/jmp.f`，然後用 `JMP` 把 `COMPILE,` 和 `LIT,` 改寫成自己的 `NEW-COMPILE,` / `NEW-LIT,`。之後**每次編譯一個 reference 時**，就會經過 `ADD-TO-MAP` 印出一行（包含 `HERE`、xt、以及用 `WordByAddr`/`SFIND` 反查到的 word 名稱）。
-
-也就是說：載入 `map.f` 之後，**接下來編譯的程式碼會邊編譯邊印出 reference map**。它本質上是一個「載入即啟動」的 compiler 監控工具，這也是為什麼它被歸類為實驗性質——它會改動全域的 `COMPILE,` / `LIT,` 行為。
-
-**你通常會在什麼情況用它？**
-
-1. 想看大型專案裡「誰編譯/引用了誰」。  
-2. 想 debug 交叉參照或 dependency map。  
-3. 想學 SPF 的 hot-patch compiler 技巧。
-
-**載入方式**（注意：載入後會立刻開始 instrument 編譯流程）：
-
-```forth
-S" ac-lib3/tools/map.f" INCLUDED
-```
-
-**完整可跑範例 1**（載入後編譯任何東西都會印 map）：
-
-```forth
-S" ac-lib3/tools/map.f" INCLUDED
-
-\ 從這裡開始，編譯時就會逐行印出 reference map
-: DEMO  1 2 + . ;
-\ 編譯 DEMO 的過程會印出每個被編進去的 reference（如 + 與 . 等）
-```
-
-**完整可跑範例 2**（map.f 內附的自我測試字）：
-
-```forth
-S" ac-lib3/tools/map.f" INCLUDED
-
-ZZZ          \ map.f 內定義了 ZZZ 作為示範，執行可看到 instrument 效果
-```
-
-> 提醒：`map.f` 屬於「全域改寫 compiler」的工具，會影響之後**所有**編譯動作。除錯完通常會在乾淨的 session 重新載入系統，而不是繼續沿用被 instrument 過的環境。
-
-### `list/STR_LIST.F`
-
-**它是做什麼的？**  
-提供 xcount 字串清單與單向鏈結串列的基本操作。
-
-**你通常會在什麼情況用它？**
-
-1. 想維護一串字串集合。  
-2. 想做 membership test (`inList`)。  
-3. 想找最小但實用的資料結構範例。
-
-**例子**：
-
-- 建一個字串黑名單 / 白名單。
-- 把 parse 出來的字串值逐一 `AddNode` 存起來。
-
-**實際 Forth 範例碼**：
-
-```forth
-value my-list
-S" hello" AddNode my-list
-S" world" AddNode my-list
-```
-
-```forth
-S" hello" my-list inList .
-```
-
-### `transl/vocab.f`
-
-**它是做什麼的？**  
-提供 `InVoc{ ... }PrevVoc`、`Public{ ... }Public` 這類語法糖，讓 vocabulary / public API 的定義比較不囉唆。
-
-**你通常會在什麼情況用它？**
-
-1. 想把一批 word 收進某個 vocabulary。  
-2. 想宣告 public API，而不手刻 `ALSO DEFINITIONS PREVIOUS`。  
-3. 想看 SPF 如何把詞彙表操作包成 block syntax。
-
-**例子**：
-
-- 寫模組型 library 時，把內部字與公開字分開。
-- 讀 `mbox/text_mbox_parsing.f` 時理解它怎麼建立自己的 vocabulary。
-
-**實際 Forth 範例碼**：
-
-```forth
-InVoc{ MyModule
-  Public{
-    : hello ... ;
-  }Public
-}PrevVoc
-```
-
-```forth
-InVoc{ ParserState
-  : reset ... ;
-}PrevVoc
-```
-
-### `transl/BNF.F`
-
-**它是做什麼的？**  
-提供一套 BNF / parser scaffolding，用來寫小型語法解析器。
-
-**你通常會在什麼情況用它？**
-
-1. 想 parse 某種協定語法。  
-2. 想寫設定檔 / mini-language parser。  
-3. 想看 SPF 世界裡「文法導向 parser」怎麼搭。
-
-**例子**：
-
-- 寫自訂 DSL parser。
-- 寫 protocol header parser。
-- 研究 `Look` / `Match` / `Expected` 這種 parser 基本骨架。
-
-**實際 Forth 範例碼**：
-
-```forth
-CHAR ( Match
-GetQuoted
-CHAR ) Match
-```
-
-```forth
-LookString S" BEGIN" IF ... THEN
-```
-
-### `ruvim/MASK.F`
-
-**它是做什麼的？**  
-提供 wildcard mask matching（`*` / `?` / 跳脫字元），偏向 glob 類比對。
-
-**你通常會在什麼情況用它？**
-
-1. 想做簡單檔名 / 模式匹配，而不需要完整 regexp。  
-2. 想做大小寫不敏感的 wildcard compare。  
-3. 想要比 regexp 更輕量的 match 工具。
-
-**例子**：
-
-- 比對 `*.txt` / `mail-??.log` 類檔名樣式。
-- 在規則系統裡做 pattern filter。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" report.txt" S" *.txt" WildCMP-U
-```
-
-```forth
-S" mail-01.log" S" mail-??.log" WildCMP-U
-```
-
-### `res_ctrl.f`
-
-**它是做什麼的？**  
-這是一個 thread-aware resource table，用來追蹤資源（尤其 file handle）。很明顯帶有 Eserv2 風格。
-
-**你通常會在什麼情況用它？**
-
-1. 想抓 file handle leak。  
-2. 想學多執行緒資源表怎麼做。  
-3. 想研究 SPF 裡 vector + mutex 的組合方式。
-
-**例子**：
-
-- 攔截 `OPEN-FILE` / `CLOSE-FILE`，看誰沒關檔。
-- 在 server 型程式裡追蹤每個 thread 持有的資源。
-
-**實際 Forth 範例碼**：
-
-```forth
-INIT-RTABLE
-DUMP-RES
-```
-
-```forth
-S" test.txt" R/O OPEN-FILE DROP
-DUMP-RES
-```
-
-### `memory/heap_enum.f` / `heap_enum2.f` / `less_mem.f`
-
-**它們是做什麼的？**  
-前兩者用來列舉 heap，後者用來收縮 process working set。偏 Win32 記憶體觀察/調整工具。
-
-**你通常會在什麼情況用它們？**
-
-1. 想看目前 process 的 heap 狀態。  
-2. 想調查字串 buffer / heap allocation 流失。  
-3. 想在長時間 idle 的程式裡要求 OS 回收 working set。
-
-**例子**：
-
-- 用 `heap_enum2.f` 配合 `str4.f` 找遺失的 STRBUF。
-- 在 WinNT 上跑 `ReduceMem`，把 working set 壓下來。
-
-**實際 Forth 範例碼**：
-
-```forth
-MEM
-```
-
-```forth
-ReduceMem
-```
-
-### `win/registry2.f` / `REGISTRY.F`
-
-**它們是做什麼的？**  
-都是 Windows registry 操作庫。`REGISTRY.F` 是舊版（TEMPS 風格），`registry2.f` 是改寫成 `LOCALS.F` 風格的較新版。
-
-**你通常會在什麼情況用它們？**
-
-1. 想讀/寫 registry key/value。  
-2. 想列舉某個 key 下的所有 subkeys / values。  
-3. 想看 SPF 如何包 `RegOpenKeyA` / `RegQueryValueExA` 這一類 API。
-
-**例子**：
-
-- 讀某個設定值：`StrValue` / `NumValue` / `BinValue`
-- 列舉 key/value：`RG_ForEachKey` / `RG_ForEachValue`
-- 維護舊程式時，若看到 TEMPS 風格就看 `REGISTRY.F`；新程式優先看 `registry2.f`
-
-**實際 Forth 範例碼**：
-
-```forth
-S" ac-lib3/win/registry2.f" INCLUDED
-
-S" ProxyServer" S" SOFTWARE\\Example" StrValue
-```
-
-```forth
-S" ac-lib3/win/registry2.f" INCLUDED
-
-: TYPECR ( addr u -- ) TYPE CR ;
-
-S" SOFTWARE\\Example" HKEY_LOCAL_MACHINE RG_OpenKey THROW  ( h )
-['] TYPECR SWAP RG_ForEachKey
-```
-
-### `win/ini.f`
-
-**它是做什麼的？**  
-INI 檔操作封裝，還提供 `File.Section[Key]` 類型的方便語法。
-
-**你通常會在什麼情況用它？**
-
-1. 應用程式配置存在 INI 檔。  
-2. 想做 default / fallback ini 查詢。  
-3. 想要比直接 `GetPrivateProfileStringA` 更好用的包裝。
-
-**例子**：
-
-- 讀 `Mail[CMCDLLNAME32]` 類設定值。
-- 做兩份 ini（正式 / 原始）之間的 fallback 查詢。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" key" S" section" S" file.ini" IniFile@
-```
-
-```forth
-S" g:\\WINXP\\win.ini.Mail[CMCDLLNAME32]" IniS@
-```
-
-### `win/file/`
-
-**它是做什麼的？**  
-補 Win32 檔案系統相關能力：find file、遞迴列舉、file time、share-delete、FILE* stream 包裝。
-
-**你通常會在什麼情況用它？**
-
-1. 想遞迴掃目錄。  
-2. 想讀檔案時間戳。  
-3. 想在檔案開啟時仍允許 delete/share。  
-4. 想橋接到 C runtime stream。
-
-**例子**：
-
-- 找出某目錄下所有符合 pattern 的檔案。
-- 做 recursive file scan (`findfile-r.f`)。
-- 需要 `FILE_SHARE_DELETE` 的 Windows 特殊開檔模式。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" *.txt" ['] TYPE FIND-FILES
-```
-
-```forth
-S" c:\\logs\\*.log" ['] TYPE FIND-FILES-R
-```
-
-### `win/process/`
-
-**它是做什麼的？**  
-封裝 process 啟動、等待、列舉、kill、pipe、child I/O 等功能。
-
-**你通常會在什麼情況用它？**
-
-1. 想在 SPF 裡啟動外部程式。  
-2. 想抓 child process 的 stdin/stdout。  
-3. 想列舉或結束現有 process。  
-4. 想處理 console control handler / shutdown。
-
-**例子**：
-
-- `StartApp` / `StartAppWait` 啟動外部工具。
-- `ChildApp` 做 parent-child 的 pipe 溝通。
-- `enumproc.f` / `kill.f` 做簡單 process 管理工具。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" notepad.exe" StartApp
-```
-
-```forth
-S" ping 127.0.0.1" StartAppWait
-```
-
-### `win/service/`
-
-**它是做什麼的？**  
-提供 Windows service 相關結構與操作；還保留 `service95.f` 這類 Win9x 時代的替代方案。
-
-**你通常會在什麼情況用它？**
-
-1. 想把 SPF 應用包成 Windows service。  
-2. 想建立 / 刪除 / 控制 service。  
-3. 想研究 SPF 裡 service skeleton 的寫法。
-
-**例子**：
-
-- 寫一個背景常駐服務。
-- 安裝、啟動、刪除 service。
-- 維護極舊系統時看 `service95.f` 如何在 Win9x 模擬 service。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" MyService" StartService
-```
-
-```forth
-S" MyService" DeleteService
-```
-
-### `win/com/`
-
-**它是做什麼的？**  
-這是 `ac-lib3/` 最龐大、也最具「應用能力展示」意味的區塊之一：
-
-- `COM.F` 提供 COM / OLE / BSTR / Unicode 基礎封裝
-- `com_server.f` / `com_server2.f` 提供 `Class:` / `METHOD` 風格的 COM server framework
-- `samples/` 內有大量 ADO / CDO / Outlook / IE / XML / ActiveX / .NET 互通示例
-
-**你通常會在什麼情況用它？**
-
-1. 想從 SPF 呼叫 COM / ActiveX / OLE automation。  
-2. 想研究 SPF 如何自己實作 COM class / vtable。  
-3. 想找真實的 Outlook / ADO / IE automation 範例。  
-4. 想知道 SPF 生態能做到多深的 Windows automation。
-
-**例子**：
-
-- 用 ADO / OLE DB 連資料庫。
-- 用 Outlook / IE / Messenger / XML automation 跟 Windows application 互動。
-- 研究 `com_server2.f` 的 `SPF.Application` worked example。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" ac-lib3/win/com/COM.F" INCLUDED
-
-ComInit THROW
-```
-
-```forth
-S" ac-lib3/win/com/COM.F" INCLUDED
-
-S" Scripting.FileSystemObject" ProgID>CLSID THROW  ( clsid-addr )
-\ 之後可把 clsid-addr 交給 CoCreateInstance 類流程
-```
-
-```forth
-ComExit
-```
-
-### `win/window/`
-
-**它是做什麼的？**  
-這是一整套 Win32 GUI 工具箱：window、dialog、listbox、icon、tray、popup menu、window enumeration 等。
-
-**你通常會在什麼情況用它？**
-
-1. 想在 SPF 裡做 Win32 GUI。  
-2. 想做 dialog / listbox / popup menu / tray icon。  
-3. 想研究 `WNDPROC:` + `DialogBoxIndirectParamA` 這類 GUI glue code。  
-4. 想直接在 Forth 裡動態建立 dialog template。
-
-**例子**：
-
-- 做一個簡單視窗或 modal dialog。
-- 做 tray icon / popup menu 小工具。
-- 用 `enumwindows.f` 類工具列舉 top-level windows。
-
-**實際 Forth 範例碼**：
-
-```forth
-... Window
-```
-
-```forth
-... DialogModal
-```
-
-> 這一組 API 的實際參數通常偏長，使用時要一起看 `WINCONST.F` 的常數與 `WNDPROC:` / `CALLBACK:` 風格的 glue code。
-
-### `win/winsock/`
-
-**它是做什麼的？**  
-提供從 raw socket API 到高階 line-based / UDP / DNS / IP helper 的完整 Winsock 工具鏈；而 `ws2/` 反映舊 `WSOCK32.DLL` 與較新版 `WS2_32.DLL` 的並行版本。
-
-**你通常會在什麼情況用它？**
-
-1. 想做 TCP / UDP client/server。  
-2. 想做 DNS 查詢。  
-3. 想拿到本機所有 IP。  
-4. 想做 line-buffered socket I/O。  
-5. 想看 SPF 生態怎麼包網路 API。
-
-**例子**：
-
-- `PSOCKET.F` 提供類 PHP 的 `fsockopen / fgets / fputs` 介面。
-- `server_udp.f` / `listen_udp.f` 用於 UDP server。
-- `dns_q.f` 可直接做 MX / domain 驗證。
-- `foreach_ip.f` 可列出本機與外部 IP。
-
-**實際 Forth 範例碼**：
-
-```forth
-S" ac-lib3/win/winsock/SOCKETS.F" INCLUDED
-
-SocketsStartup THROW
-CreateSocket THROW   ( socket )
-```
-
-```forth
-S" ac-lib3/STR2.F" INCLUDED
-S" ac-lib3/win/winsock/PSOCKET.F" INCLUDED
-
-S" www.example.com" 80 fsockopen  ( socketline )
-" GET / HTTP/1.0{CRLF}{CRLF}" OVER fputs
-fgets STR@ TYPE
-fclose
-```
-
-```forth
-S" ac-lib3/win/winsock/dns_q.f" INCLUDED
-
-S" example.com" GetMXs
-```
-
-### `win/access/`
-
-**它是做什麼的？**  
-提供 Windows 帳號、SID、ACL、privilege、LSA logon、群組列舉等安全相關工具。
-
-**你通常會在什麼情況用它？**
-
-1. 想知道目前執行者是誰。  
-2. 想調整 process ACL 或 token privilege。  
-3. 想做 impersonation / logon。  
-4. 想列舉群組與使用者。
-
-**例子**：
-
-- `whoami.f`：快速查目前 user。
-- `NT_LOGON.F`：做 user logon / impersonation。
-- `nt_access.f` / `nt_privelege.f`：調安全設定。
-
-**實際 Forth 範例碼**：
-
-```forth
-whoami TYPE
-```
-
-```forth
-S" user" S" password" LoginUser
-```
-
-### `win/odbc/`
-
-**它是做什麼的？**  
-ODBC / SQL 封裝，從基本 ODBC 連線一路到資料來源列舉與 XML 輸出。
-
-**你通常會在什麼情況用它？**
-
-1. 想從 SPF 直接連 ODBC 資料來源。  
-2. 想列出資料來源或 tables。  
-3. 想把查詢結果轉成 XML。  
-4. 想維護舊 TEMPS 風格的 ODBC 代碼。
-
-**例子**：
-
-- 用 `ODBC.F` 建立基本 DB query flow。
-- 用 `odbc2.f` 做 DSN / driver connect 工具。
-- 用 `xmldb.f` 把 SQL query 結果直接吐成 XML。
-
-**實際 Forth 範例碼**：
-
-```forth
-StartSQL
-```
-
-```forth
-DumpDS
-```
-
-```forth
-... SqlQueryXml
-```
-
-### `win/arc/gzip/zlib.f`
-
-**它是做什麼的？**  
-封裝 `zlib.dll`，提供壓縮、解壓、CRC32 與 gzip 輸出。
-
-**你通常會在什麼情況用它？**
-
-1. 想壓縮資料或做 gzip 輸出。  
-2. 想算 CRC32。  
-3. 想把 SPF 的輸出接到 gzip writer。
-
-**例子**：
-
-- 用 `zlib_compress` / `zlib_uncompress` 對資料做壓縮與解壓。
-- 用 `gzip_write` 把資料流直接輸出成 gzip 格式。
-- 對內容做 `CRC32` 校驗。 
-
-**實際 Forth 範例碼**：
-
-```forth
-S" hello" zlib_compress
-```
-
-```forth
-S" hello" CRC32 .
-```
-
-```forth
-S" hello" gzip
-```
+若你的目標是「我要直接拿某個檔案來用」，建議先讀使用索引；若你的目標是「我要知道 `ac-lib3/` 在 SPF repo 中扮演什麼角色」，留在本章即可。
 
 ---
 
@@ -1466,7 +463,7 @@ S" hello" gzip
 
 | 類型 | 代表 | 建議心態 |
 |------|------|----------|
-| 比較像可直接重用的庫 | `LOCALS.F`, `TEMPS.F`, `REQUIRE.F`, `STR*.F`, `string/`, `win/` | 先看 API / 用法，再決定要不要直接 include |
+| 比較像可直接重用的庫 | `LOCALS.F`, `TEMPS.F`, `REQUIRE.F`, `STR*.F`, `string/`, `win/` | 先看 API / 用法，再決定要不要直接載入 |
 | 比較像工具與除錯輔助 | `debug/`, `tools/`, `memory/` | 遇到特定需求時再翻，常有現成小工具 |
 | 比較像範例 / 實驗 / 參考倉 | `transl/`, `list/`, `mbox/`, `ruvim/`, 部分 `util/` | 更適合找思路、命名與實作風格，不一定直接搬進主專案 |
 
@@ -1526,7 +523,7 @@ S" hello" gzip
 
 - SPF 生態的延伸函式庫倉
 - 應用層與工具層的高價值資產
-- 社群累積的 reusable solution set
+- 社群累積的可重用解法集合
 
 因此，它最適合的角色不是「追 kernel 時必讀」，而是：
 
@@ -1562,5 +559,6 @@ S" hello" gzip
 - 若你想理解 SPF 本體的 module / include / 載入策略，先讀 [00-overview.md](00-overview.md) 與 [02-compiler.md](02-compiler.md)。
 - 若你想知道 `devel/` 為什麼也會進模組搜尋路徑，回看 [05-io-error-init.md](05-io-error-init.md) 中 `spf_module.f` 的路徑處理。
 - 若你想理解 build helper（如 `fres.f`）如何與 `devel/` 發生關聯，回看 [06-build-save.md](06-build-save.md)。
+- 若你想直接查某個 `ac-lib3/` 檔案怎麼用，接著讀 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md)。
 
 本章的目的不是把 `ac-lib3/` 的每個檔案都拆開逐行追，而是先給你一張足夠實用的「地圖」。真正要深入某個檔案時，再沿著這張地圖找進去，會比直接從目錄樹盲翻有效得多。
