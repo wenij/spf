@@ -506,6 +506,14 @@ S" SOFTWARE\\Example" HKEY_LOCAL_MACHINE RG_OpenKey THROW
 - `registry2.f` 預設 `EK` 是 `HKEY_LOCAL_MACHINE`。
 - 若要查 `HKEY_CURRENT_USER` 等其它 hive，要先改 `EK`。
 
+實務上常見的三個用法：
+
+1. **讀單一值**：`StrValue` / `NumValue`
+2. **列舉 key / value**：`RG_ForEachKey` / `RG_ForEachValue`
+3. **寫設定**：`StrValue!` / `NumValue!`
+
+如果你只是維護舊系統的設定，`registry2.f` 往往已經夠；只有碰到 ACL / privilege / impersonation 一起進場時，才要聯動看 `win/access/`。
+
 ### `win/ini.f`
 
 用途：INI 檔操作，並提供 `File.Section[Key]` 風格的便利語法。
@@ -519,6 +527,12 @@ S" key" S" section" S" file.ini" IniFile@
 ```forth
 S" g:\\WINXP\\win.ini.Mail[CMCDLLNAME32]" IniS@
 ```
+
+判斷方式：
+
+- 檔名、section、key 都分開拿在 stack 上 → `IniFile@`
+- 已經有完整 `file.section[key]` 字串 → `IniS@`
+- 想列舉整個 section → 回頭看 `IniEnum`
 
 ### `win/file/`
 
@@ -550,6 +564,12 @@ S" ping 127.0.0.1" StartAppWait
 
 注意：`StartApp` / `StartAppWait` 回傳 CreateProcess 結果；這組 wrapper 很貼近 Win32 API，錯誤處理要看原檔的堆疊效果。
 
+實務判斷：
+
+- 只想 fire-and-forget 啟動外部程式 → `StartApp`
+- 需要等它結束再繼續 → `StartAppWait`
+- 需要 pipe / child stdin/stdout → 追 `ChildApp` 類 helper
+
 ### `win/service/`
 
 用途：Windows service skeleton 與 service control helper。
@@ -565,6 +585,11 @@ S" MyService" DeleteService
 ```
 
 注意：`SERVICE.F` 裡的 `StartService` 是呼叫 `StartServiceCtrlDispatcherA`、讓目前 process 進入 service main loop；它不是「啟動已安裝服務」的控制 API。完整安裝/控制流程要一起看 `CreateService`、`DeleteService` 與 `service_struct.f`。
+
+這一點很容易誤用：
+
+- 想把目前 SPF 程式變成 service main → 看 `StartService`
+- 想安裝 / 移除 / 控制已存在 service → 看 `CreateService` / `DeleteService` / service control API
 
 ### `win/com/`
 
@@ -591,6 +616,12 @@ ComExit
 - 想呼叫 COM / ActiveX：先看 `COM.F`。
 - 想看 automation 實例：看 `win/com/samples/`。
 - 想研究 SPF 實作 COM server：看 `com_server.f` / `com_server2.f`。
+
+一個實務上的心智模型：
+
+- 只要 COM object lifecycle（`CoInitialize` / `CoCreateInstance` 類）→ `COM.F`
+- 要 Outlook / IE / XML / ADO 自動化 → 直接進 `samples/`
+- 要自己暴露 COM object 給外部程式呼叫 → `com_server*.f`
 
 ### `win/window/`
 
@@ -640,6 +671,12 @@ R> fclose
 - `fgets` 回傳字串物件；若直接輸出，可用 `STYPE`。
 - `ws2/` 子目錄是 `WS2_32.DLL` 版本，非 `ws2/` 則多為舊 `WSOCK32.DLL` 版本。
 
+這組的選擇原則很單純：
+
+- 想像 PHP 一樣快速寫 line-based client → `PSOCKET.F`
+- 想精確控制 socket lifecycle / timeout / UDP → `SOCKETS.F` + 其它 helper
+- 想查 DNS / MX → `dns_q.f` 與相關 query helper
+
 ### `win/access/`
 
 用途：帳號、SID、ACL、privilege、LSA logon、群組列舉。
@@ -655,6 +692,8 @@ S" user" S" password" LoginUser
 ```
 
 注意：`LoginUser` 會呼叫 `LogonUserA` / `ImpersonateLoggedOnUser`，實際可用性取決於 Windows 權限與 logon type。
+
+如果你只是想知道「現在是誰」或「目前 token 有哪些群組」，這組比 registry / COM 更接近系統管理腳本；真的碰到 ACL / privilege 問題時才值得深入。
 
 ### `win/odbc/`
 
@@ -673,6 +712,14 @@ DumpDS
 ```forth
 ... SqlQueryXml
 ```
+
+最務實的讀法：
+
+- 想先確認 machine 上有哪些 DSN → `DumpDS`
+- 想測最小 SQL 連線流程 → `StartSQL`
+- 想把結果直接轉 XML → 找 `xmldb.f` / `SqlQueryXml`
+
+如果你只是要資料庫自動化而不是 ODBC 本身，也可以比較 `win/com/samples/` 裡 ADO 的做法。
 
 ### `win/arc/gzip/zlib.f`
 
