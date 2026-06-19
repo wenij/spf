@@ -151,6 +151,24 @@ S" SGVsbG8=" debase64
 S" a%20b%3Ac" CONVERT%
 ```
 
+更像實務會寫的樣子：
+
+```forth
+S" name=sp%20forth&lang=zh-TW" CONVERT% TYPE CR
+```
+
+如果你是在處理 mail body / HTTP body 內嵌的 base64，通常是：
+
+```forth
+S" U1AtRm9ydGg=" debase64 TYPE CR
+```
+
+使用判斷：
+
+- 要解 `%20` / `%3A` 這類 URL escape → `CONVERT%`
+- 要解 base64 → `debase64`
+- 要在 CP1251 / KOI8-R 間轉換 → `KOI>WIN` / `WIN>KOI`
+
 注意：`KOI>WIN` / `WIN>KOI` 會就地改寫 buffer，不是產生新字串。
 
 ### `string/get_params.f`
@@ -172,6 +190,17 @@ S" error_code" GetParam TYPE
 - `IsSet`：檢查 key 是否存在。
 - `DumpParams`：輸出目前 parse 結果。
 
+一個更完整的 round-trip：
+
+```forth
+S" a=1&b=2" GetParamsFromString
+S" c" S" 3" SetParam
+DumpParams
+S" b" GetParam TYPE CR
+```
+
+這一組的心智模型是「先把 query string parse 進內部表，再用 `GetParam` / `SetParam` 操作」，不是每次都重新掃字串。
+
 ### `string/mime-decode.f`
 
 用途：處理 MIME / mail header encoded-word，涵蓋 RFC 2045 / 2047 / 2231 常見格式。
@@ -191,6 +220,12 @@ S" =?windows-1251?B?...?=" MimeValueDecode
 - 支援 base64 與 quoted-printable 類型。
 - `CHARSET-DECODERS` vocabulary 可掛 charset decoder。
 - 原始註解特別偏俄文郵件情境，常見 charset 包含 `windows-1251`、`koi8-r`。
+
+實務判斷：
+
+- header 看起來像 `=?charset?B?...?=` → `MimeValueDecode`
+- 如果前面還帶 `Subject:` / `From:` 這類 header name，先切掉欄位名或先做 `StripLwsp`
+- 若你的專案只處理 UTF-8 / ASCII，通常不需要整個 `mime-decode.f`
 
 ### `string/regexp.f`
 
@@ -212,6 +247,15 @@ S" one two three" S" (\S+)\s+(\S+)\s+(\S+)" PcreGetMatch
 - `PcreMatch` 回傳是否 match。
 - `PcreGetMatch` 會把整體 match 與 capture groups 放回資料堆疊，最後回傳數量。
 - 使用底層 compile/exec 流程時，要留意 `PcreFree` / `PcreEnd`。
+
+最小工作流：
+
+```forth
+S" user@example.com" S" ^([^@]+)@(.+)$" PcreGetMatch
+\ 回傳：整體 match、group1=user、group2=example.com、最後一個數字是項目數
+```
+
+如果你只要 yes/no 判斷，用 `PcreMatch`；如果你要 capture groups，才用 `PcreGetMatch`。
 
 ### `string/bregexp/bregexp.f`
 
@@ -273,6 +317,14 @@ SWAP DROP
 ?DUP IF ." LoadInitLibrary failed: " . CR THEN
 ```
 
+實務上這一組最適合的場景是：
+
+- 你已經知道 DLL 名稱與 export 名稱
+- 想把多個 `WINAPI:` 一次綁到同一個 DLL
+- 不想每次第一次呼叫時才 lazy-init
+
+如果只是偶爾宣告單一 `WINAPI:`，通常走 SPF 內建 `WINAPI:` 就夠，不一定要用 `load_lib.f`。
+
 ### `tools/dump_winapi.f`
 
 用途：走訪 `WINAPLINK`，列出目前所有 `WINAPI:` 宣告。
@@ -313,6 +365,11 @@ S" ac-lib3/tools/map.f" INCLUDED
 ```
 
 提醒：`map.f` 會改全域 compiler 行為。除錯完通常開乾淨 session，比在同一 session 裡繼續開發穩。
+
+判斷方式：
+
+- 要 patch 單一 word → `jmp.f`
+- 要看整個 compiler 在編譯期做了什麼 → `map.f`
 
 ### `list/STR_LIST.F`
 
@@ -374,6 +431,12 @@ S" report.txt" S" *.txt" WildCMP-U
 S" mail-01.log" S" mail-??.log" WildCMP-U
 ```
 
+它比 shell glob 更接近「拿兩個字串直接比對」，適合用在：
+
+- filter 檔名
+- 比對 mail address / route name pattern
+- 做小型 rule engine
+
 ### `res_ctrl.f`
 
 用途：thread-aware resource table，偏 Eserv2 風格，常用來學 file handle / resource tracking。
@@ -384,6 +447,8 @@ S" mail-01.log" S" mail-??.log" WildCMP-U
 INIT-RTABLE
 DUMP-RES
 ```
+
+如果你的程式會同時開很多 handle / buffer / session，這組可以拿來學「怎麼把資源掛進一張表，再一起 dump / 清理」，但它不是現代 RAII 或 reference counting 系統。
 
 適合用來研究，不建議未讀懂前直接搬進一般專案。
 
@@ -403,6 +468,12 @@ MEM
 ```forth
 ReduceMem
 ```
+
+用法判斷：
+
+- 想觀察 process heap 長什麼樣 → `heap_enum.f` / `heap_enum2.f`
+- 想在大型 SPF session 後手動要求 Windows 縮小 working set → `less_mem.f`
+- 想要一般 malloc/free helper → 不在這組，應回頭看 SPF 本身的 `ALLOCATE` / `FREE`
 
 ---
 
