@@ -548,6 +548,14 @@ S" *.txt" ['] TYPE FIND-FILES
 S" c:\\logs\\*.log" ['] TYPE FIND-FILES-R
 ```
 
+這組的選擇方式很直接：
+
+- 只列目前目錄 → `FIND-FILES`
+- 連子目錄一起掃 → `FIND-FILES-R`
+- 想看 file time / share-delete / C runtime stream wrapper → 再往 `win/file/` 子檔追
+
+如果你是在做備份、log collector、清理工具，這一組通常會比 `win/process/` 或 `win/access/` 更早打開。
+
 ### `win/process/`
 
 用途：啟動外部 process、等待 process、列舉、kill、pipe、child I/O。
@@ -638,6 +646,14 @@ ComExit
 ```forth
 ... DialogModal
 ```
+
+更實際的入口通常是：
+
+- 想直接建立一個 top-level 視窗 → `WINDOW.F` 裡的 `Window`
+- 想掃目前所有 top-level window → `enumwindows.f` 的 `ForEachWindow`
+- 想做 listbox / popup menu / tray icon → 直接打開對應子檔（`LISTBOX.F`、`popupmenu.f`、`notify_icon.f`）
+
+也就是說，`win/window/` 不像 `win/com/` 那麼適合從單一主檔讀完；它比較像一組 Win32 GUI 積木箱。
 
 ### `win/winsock/`
 
@@ -744,6 +760,14 @@ S" hello" gzip
 - `zlib_compress` / `zlib_uncompress` 使用 zlib 格式。
 - `gzip` / `gzip_write` 輸出 gzip 格式。
 - 需要 `zlib.dll`。
+
+最常見的分法：
+
+- 只想拿到壓縮後的 buffer → `zlib_compress`
+- 想產生標準 `gzip` 內容給 HTTP / 檔案輸出 → `gzip`
+- 想邊讀邊寫 streaming output → `gzip_write`
+
+這一組比 `lib/` 更接近「直接可拿去做 web / mail / archive」的應用層工具。
 
 ---
 

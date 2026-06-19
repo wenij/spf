@@ -461,7 +461,9 @@ RET
 16. `16-lib.md`：若你想理解 `lib/`、ANS include 檔、`spf4e` 擴充載入與平台可選延伸庫，再看這章。
 17. `16-lib-cookbook.md`：若你想直接照抄 `lib/include/`、`lib/ext/`、`lib/posix/`、`lib/win/` 的 runnable examples，再看 recipe。
 18. `17-ac-lib3.md`：若你想找整理過的延伸函式庫與工具箱，先看這章；它會告訴你 `ac-lib3/` 各 library family 適合解哪些問題。
-19. `18-devel.md`：若你想追作者工作區、歷史原型、framework/app 範例與 build helper 來源，再看這章。
+19. `17-ac-lib3-cookbook.md`：若你想直接按用途查 `ac-lib3/` 的 string / tools / win family，接著讀這章。
+20. `18-devel.md`：若你想追作者工作區、歷史原型、framework/app 範例與 build helper 來源，再看這章。
+21. `18-devel-cookbook.md`：若你想用需求導向方式在 `lib/` / `ac-lib3/` / `devel/` 三者之間選邊，最後讀這章。
 
 ### 7.2 文件索引
 
