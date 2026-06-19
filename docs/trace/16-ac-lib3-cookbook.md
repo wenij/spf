@@ -647,3 +647,92 @@ S" hello" gzip
 | 插樁 / 除錯 | `debug/TRACE.F`、`tools/map.f` |
 
 本章的目的不是取代原始檔註解，而是讓你知道第一個入口在哪裡。真正要接進專案時，仍應回到對應 `.f` 檔開頭，確認 `REQUIRE` 依賴、堆疊效果與外部 DLL 前提。
+
+---
+
+## 7. 與 `lib/`、`devel/` 的對照
+
+`ac-lib3/` 不是 `spf4e` 預設帶的延伸庫；它歷史悠久、依賴多、文件語言夾雜。許多 `ac-lib3/` 提供的功能在 [18-lib.md](18-lib.md) 與 [17-devel.md](17-devel.md) 都有更輕量或更現代的替代方案。
+
+### 7.1 三大延伸函式庫的角色差異
+
+| 面向 | `lib/` | `ac-lib3/` | `devel/` |
+|------|--------|------------|----------|
+| 收錄 | `spf4e` 自帶 | 需手動 `INCLUDE` | 視需要 |
+| 體積 | 小（核心補齊） | 大（歷史大集合） | 視作者而定 |
+| 依賴 | 內部 `REQUIRE` 鏈 | 常用 `~ac/lib/...` | 作者子樹依賴 |
+| 文件語言 | 英文為主 | 俄文 / 英文混雜 | 視作者而定 |
+| 對 production 友善程度 | 高 | 中-高 | 中-低 |
+
+詳細決策矩陣見 [17-devel-cookbook.md §6](17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel)。
+
+### 7.2 從 `ac-lib3/` 角度看 `lib/` 替代方案
+
+下面列出 `ac-lib3/` 常用功能與 `lib/` 對應；選 `lib/` 通常代表「少一個依賴」。
+
+| `ac-lib3/` 需求 | `lib/` 替代方案 | 差異 |
+|----------------|----------------|------|
+| `LOCALS.F` 的 `{ ... }` | `lib/ext/locals.f` | 兩者 frame 模型不同，語法類似 |
+| `TEMPS.F` 的 `\| ... \|` | 無 | 純 `ac-lib3` 歷史風格 |
+| `STR2.F` / `STR3.F` 模板字串 | 無 | SP-Forth 沒有官方對應，需自己組 |
+| `string/CONV.F` base64 / URL decode | `lib/ext/uppercase.f` 只有大小寫 | base64 需自寫或 `~nn/lib/base64.f` |
+| `string/regexp.f` PCRE | 無 | 需自己 bind PCRE 或 `~ygrek/` 系列 |
+| `string/mime-decode.f` | 無 | 需自寫或用第三方 |
+| `debug/TRACE.F` | 無 | 需自己 patch compiler |
+| `tools/jmp.f` / `tools/map.f` | `lib/ext/patch.f` 提供 `REPLACE-WORD` | 語法較低階，要自己包裝 |
+| `transl/vocab.f` `InVoc{ }` | `lib/ext/vocs.f` 通用 vocabulary 工具 | 語法風格不同 |
+| `list/STR_LIST.F` linked list | 無 | 沒有鏈結串列對應 |
+| `tools/load_lib.f` 動態載入 DLL | `lib/ext/util.f` `TryOpenFile` 是檔案版本 | 不是 DLL 載入對應 |
+| `ruvim/MASK.F` wildcard | 無 | 沒有 glob 對應 |
+
+> 簡單講：`ac-lib3/` 的「語言延伸 / 模板 / 工具」這三類有相當比例可以用 `lib/` 部分替代；但「Windows 系統整合 / 字串高階處理 / trace 工具」這三類幾乎是 `ac-lib3/` 獨有。
+
+### 7.3 可以完全用 `lib/` 取代 `ac-lib3/` 的場景
+
+如果你的專案：
+
+- 只需要常見的 ANS word set（`lib/include/ansi.f` 已含）
+- 不需要 Windows API 進階整合（registry / COM / ODBC / Winsock）
+- 不需要字串模板 / regex / MIME
+- 不需要鏈結串列 / heap 掃描
+
+那 `spf4e` 內建的 `lib/` 就足夠，可以完全不引入 `ac-lib3/`，連 `~ac/lib/...` 路徑都不用解析。
+
+### 7.4 無替代方案，必須用 `ac-lib3/` 的場景
+
+下面這些功能目前只有 `ac-lib3/` 有對應實作（`lib/` 沒有，`devel/` 也不一定）：
+
+| 功能 | 必看 | 備註 |
+|------|------|------|
+| 字串模板（`STR2.F`） | `ac-lib3/STR2.F` | 沒有 `lib/` 對應 |
+| PCRE regex | `ac-lib3/string/regexp.f` | 需 `pcre.dll` |
+| MIME 解碼 | `ac-lib3/string/mime-decode.f` | 偏俄文郵件情境 |
+| Windows registry | `ac-lib3/win/registry2.f` | 沒有 `lib/` 對應 |
+| Windows INI 高階讀寫 | `ac-lib3/win/ini.f` | 沒有 `IniFile@` 對應 |
+| Windows process 啟動 | `ac-lib3/win/process/` | 沒有 `lib/` 對應 |
+| Windows service skeleton | `ac-lib3/win/service/` | 沒有 `lib/` 對應 |
+| Windows COM / OLE | `ac-lib3/win/com/` | 沒有 `lib/` 對應 |
+| Winsock / DNS | `ac-lib3/win/winsock/` | 沒有 `lib/` 對應 |
+| ODBC / SQL | `ac-lib3/win/odbc/` | 沒有 `lib/` 對應 |
+| Windows security / ACL | `ac-lib3/win/access/` | 沒有 `lib/` 對應 |
+| zlib / gzip | `ac-lib3/win/arc/gzip/zlib.f` | 沒有 `lib/` 對應 |
+| trace / instrumentation | `ac-lib3/debug/TRACE.F`、`tools/jmp.f`、`tools/map.f` | 沒有 `lib/` 對應 |
+| linked list | `ac-lib3/list/STR_LIST.F` | 沒有 `lib/` 對應 |
+| heap 掃描 | `ac-lib3/memory/heap_enum.f` | 沒有 `lib/` 對應 |
+| 動態載入 DLL + 綁 symbol | `ac-lib3/tools/load_lib.f` | `lib/ext/util.f` 只對應檔案 |
+| `devel/` 類作者空間 | 無（`ac-lib3/` 不對應） | 對應 `devel/~xxx/lib/` |
+
+> 看到這張表才發現「`ac-lib3/` 在 Windows 進階整合上是不可取代的」這件事，是 `ac-lib3/` 至今仍被維護的主要理由。
+
+### 7.5 兩個對照章節的互補關係
+
+| 章節 | 視角 | 何時用 |
+|------|------|--------|
+| [17-devel-cookbook.md §6](17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) | 從「需求」出發：看 `lib/` / `ac-lib3/` / `devel/` 各自有什麼 | 第一次選用、不確定要 include 誰 |
+| 本章 §7 | 從「`ac-lib3/` 既有方案」出發：看 `lib/` 與 `devel/` 有沒有對應替代 | 已經在用 `ac-lib3/`，想評估能不能換成 `lib/` |
+
+建議的閱讀順序：
+
+1. 先看 [17-devel-cookbook.md §6](17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 決定大方向。
+2. 如果結論是「用 `ac-lib3/`」，回到本章 §7 與 [18-lib.md](18-lib.md) 確認哪些 `ac-lib3/` 功能可以同時用 `lib/` 取代、減少 `~ac/lib/...` 依賴。
+3. 如果是要找某個特定作者的 prototype 或範例，看 [17-devel-cookbook.md §3-§4](17-devel-cookbook.md#3-作者子樹使用索引) 的作者子樹索引。
