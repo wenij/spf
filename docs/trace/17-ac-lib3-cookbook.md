@@ -554,6 +554,22 @@ S" c:\\logs\\*.log" ['] TYPE FIND-FILES-R
 - 連子目錄一起掃 → `FIND-FILES-R`
 - 想看 file time / share-delete / C runtime stream wrapper → 再往 `win/file/` 子檔追
 
+如果你要更接近實務的例子，可以往這兩個方向看：
+
+```forth
+\ 取 file time
+S" log.txt" R/O OPEN-FILE THROW >R
+R@ GET-FILETIME . CR
+R> CLOSE-FILE THROW
+```
+
+```forth
+\ 允許 share-delete 的開檔方式
+S" log.txt" R/W OPEN-FILE-SHARED-DELETE THROW DROP
+```
+
+也就是說，`win/file/` 不只是列檔案，還包含「你想怎麼開這個檔」的 Win32 細節。
+
 如果你是在做備份、log collector、清理工具，這一組通常會比 `win/process/` 或 `win/access/` 更早打開。
 
 ### `win/process/`
@@ -654,6 +670,24 @@ ComExit
 - 想做 listbox / popup menu / tray icon → 直接打開對應子檔（`LISTBOX.F`、`popupmenu.f`、`notify_icon.f`）
 
 也就是說，`win/window/` 不像 `win/com/` 那麼適合從單一主檔讀完；它比較像一組 Win32 GUI 積木箱。
+
+最小 top-level window 方向感：
+
+```forth
+S" ac-lib3/win/window/WINDOW.F" INCLUDED
+
+S" EDIT" WS_OVERLAPPEDWINDOW 0 Window DUP
+WindowShow
+```
+
+想做「看目前桌面上有哪些視窗」，比自己造一個視窗更適合從 `enumwindows.f` 開始：
+
+```forth
+S" ac-lib3/win/window/enumwindows.f" INCLUDED
+
+: .WND ( hwnd -- ) . CR ;
+['] .WND ForEachWindow DROP
+```
 
 ### `win/winsock/`
 
@@ -768,6 +802,20 @@ S" hello" gzip
 - 想邊讀邊寫 streaming output → `gzip_write`
 
 這一組比 `lib/` 更接近「直接可拿去做 web / mail / archive」的應用層工具。
+
+例如：
+
+```forth
+S" payload" gzip 2DUP TYPE CR
+```
+
+或只算 checksum：
+
+```forth
+S" payload" CRC32 . CR
+```
+
+如果你是在做 HTTP response 或壓縮檔輸出，通常會比 `zlib_compress` 更早想到 `gzip` / `gzip_write`。
 
 ---
 
