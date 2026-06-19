@@ -81,6 +81,31 @@ REQUIRE ANSI-FILE    lib/include/ansi-file.f
 | `lib/include/float2.f` | 浮點延伸，`spf4e.f` 會透過 `FCONSTANT` 需要它 |
 | `lib/include/quotations.f` | `[: ... ;]` quotation 語法 |
 
+這一區最容易混淆的是 **double** 與 **float**：
+
+| 類型 | 主要檔案 | 放在哪個 stack | 適合什麼 |
+|------|----------|-----------------|----------|
+| double-cell integer | `lib/include/double.f` | 一般 data stack（兩個 cell） | 大整數、file offset、計數器、`<# # #S #>` 格式化、`REPOSITION-FILE` / `FILE-SIZE` 這類要用 `ud` / `d` 的 API |
+| floating-point | `lib/include/float2.f` | **獨立的 floating-point stack** | 工程計算、幾何、平均值、比例、三角與開方等非整數運算 |
+
+也就是說：
+
+- `double.f` 不是「雙精度浮點數」，而是 **double-cell 整數**。
+- `float2.f` 才是浮點數支援；在 x86 / x87 背景下，實際上通常對應 IEEE 754 類型的 double-precision 行為。
+
+使用上最重要的判斷原則：
+
+1. **要精確整數** → 先想 `double.f`
+2. **要小數與量測值** → 先想 `float2.f`
+3. **要把 file offset / size 串進系統 API** → 幾乎一定會碰到 `d` / `ud`
+4. **不要把 `2VALUE` 當作 float 用**；`2VALUE` 儲存的是兩個 cell，不是浮點 stack 上的 `r`
+
+常見誤區：
+
+- `123.` / `0.` / `1.` 這種尾巴帶點的是 **double-cell 整數 literal**。
+- `1.5E` / `3e` 這種帶 exponent 記法的是 **浮點 literal**。
+- Forth 標準的 float word set 用 `( F: before -- after )` 標示獨立的 float stack；因此 `FCONSTANT` / `FVARIABLE` / `FVALUE` 與 `2CONSTANT` / `2VALUE` 不是同一套型別系統。
+
 實際可跑範例（`CASE` / `DEFER` / `[: ... ;]` / `2CONSTANT` / `FCONSTANT` / `INCLUDE` / `BIN` / `FILE-STATUS` 等）已拆到 [16-lib-cookbook.md §2](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#2-libinclude-可跑範例)。
 
 ---

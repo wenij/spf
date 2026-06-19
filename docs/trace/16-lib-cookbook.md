@@ -251,6 +251,14 @@ DROP
 
 ### 2.9 `double.f` — `2CONSTANT` / `2VARIABLE` / `2VALUE` / `D.R`
 
+`double.f` 處理的是 **double-cell integer**，不是浮點數。也就是說，一個 `d` / `ud` 會佔 **兩個 cell**，仍然走一般 data stack。
+
+它最常出現於三種情境：
+
+1. **超過單一 cell 範圍的整數**
+2. **檔案大小 / offset**（例如 `FILE-SIZE`、`REPOSITION-FILE`）
+3. **數值格式化**（`<# # #S #>` 與 `D.R` / `D.`）
+
 `2CONSTANT` 與 `2VARIABLE` 對應 ANS Forth 的 double-cell 數值：
 
 ```forth
@@ -270,11 +278,21 @@ BUMP-COUNTER BUMP-COUNTER
 SHOW-COUNTER
 ```
 
+若你只是從 single-cell 整數升級成 double-cell，先用 `S>D`：
+
+```forth
+123456 S>D D. CR     \ 印出 123456
+-1 S>D D0< . CR      \ -1 (true)
+```
+
 `2VALUE` 是 double-cell 版的可改值變數（要 `TO` 設定）：
 
 ```forth
-2VALUE CURRENT-POS
-1.5E CURRENT-POS 2!     \ 用 double-cell 存浮點
+1000. 2VALUE LIMIT-D
+LIMIT-D D. CR
+
+2000. TO LIMIT-D
+LIMIT-D D. CR
 ```
 
 `D.R` 與 `.R` 類似但處理 double-cell：
@@ -284,9 +302,33 @@ SHOW-COUNTER
 \ 印出右對齊到 20 字元的 double-cell 數字
 ```
 
+幾個常用的 double 運算：
+
+```forth
+10. 20. D+ D. CR      \ 30
+10. 20. DMAX D. CR    \ 20
+10. 20. DMIN D. CR    \ 10
+100. 5 M+ D. CR       \ 105
+```
+
+> `S>D` 是把 single-cell 整數 sign-extend 成 double-cell；如果你處理的是 unsigned 值，常見做法是 `0 SWAP` 組成 `ud`，而不是直接 `S>D`。
+
 ### 2.10 `float2.f` — `FCONSTANT` / `F.` / `FS.`
 
-`float2.f` 補齊 SP-Forth 的浮點延伸，`spf4e` 透過 `FCONSTANT` 自動引入：
+`float2.f` 補齊 SP-Forth 的浮點延伸。和 `double.f` 最大的差異是：
+
+- `double.f` = 兩個 cell 的 **整數**
+- `float2.f` = 放在 **獨立 floating-point stack** 的實數
+
+因此 stack comment 會寫成：
+
+```text
+( F: r1 -- r2 )
+```
+
+這表示它不是吃一般 data stack 的 `n` / `u` / `d`，而是吃 float stack 上的 `r`。
+
+`spf4e` 透過 `FCONSTANT` 自動引入：
 
 ```forth
 REQUIRE FCONSTANT lib/include/float2.f
@@ -298,7 +340,58 @@ FCONSTANT E    2.718281828459045e
 1.5e CIRCUMFERENCE        \ 9.4247...
 ```
 
-> `F.` / `FS.` 是 day 9.03.2005 加入的高階輸出；`F.` 預設 6 位、`FS.` 採整數表示法。`REPRESENT` 與底層 pad 由 `~yGREK` 重構。
+若需要可修改的 float 值，用 `FVARIABLE` / `FVALUE`：
+
+```forth
+REQUIRE FCONSTANT lib/include/float2.f
+
+FVARIABLE TEMPERATURE
+36.5e TEMPERATURE F!
+TEMPERATURE F@ F. CR
+
+1.6180339887e FVALUE GOLDEN
+GOLDEN F. CR
+
+1.4142135623e TO GOLDEN
+GOLDEN FS. CR
+```
+
+`float2.f` 裡還補了 rounding 類工具，很適合做量測值與 UI 輸出：
+
+```forth
+2.9e FLOOR  F. CR     \ 2.000000
+2.1e FROUND F. CR     \ 2.000000
+2.9e FROUND F. CR     \ 3.000000
+```
+
+幾個實戰上很常見的範例：
+
+```forth
+\ 平均值
+: AVG2 ( F: r1 r2 -- r3 )  F+ 2e F/ ;
+10e 14e AVG2 FS. CR        \ 12
+
+\ 攝氏轉華氏
+: C>F ( F: c -- f )  9e F* 5e F/ 32e F+ ;
+25e C>F F. CR
+
+\ 圓面積
+: CIRCLE-AREA ( F: r -- area )  DUP F* PI2 F* ;
+3e CIRCLE-AREA F. CR
+```
+
+從外部知識角度理解，這裡的 `double precision` 指的是 IEEE 754 類型的 64-bit 浮點表示：
+
+- 1 bit sign
+- 11 bits exponent
+- 52 bits fraction（有效精度約 15~17 位十進位數）
+
+所以：
+
+- 金額、計數、檔案 offset 這類需要 **精確整數** 的資料，不要用 float，改用 `double.f`
+- 幾何、比例、平均值、量測值這類接受誤差的資料，才用 `float2.f`
+
+> `F.` / `FS.` 是 day 9.03.2005 加入的高階輸出；`F.` 預設 6 位、`FS.` 採整數表示法。`REPRESENT` 與底層 pad 由 `~yGREK` 重構。對應 Forth 標準語意上，`FCONSTANT` / `FVARIABLE` / `FVALUE` 都屬於 optional floating-point word set。 
 
 ### 2.11 `ansi.f` 補齊的 convenience — `INCLUDE` / `BIN` / `FILE-STATUS`
 
