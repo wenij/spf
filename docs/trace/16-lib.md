@@ -401,6 +401,18 @@ synonym filename-existent file-exists   \ 把 FILE-EXIST 別名成 filename-exis
 | 想用 case-insensitive | `S" lib/ext/caseins.f" INCLUDED`（`spf4e` 已含） |
 | Windows 想用 Win32 API 完整封裝 | `S" lib/win/const.f" INCLUDED` 後 `WINAPI:` 即可 |
 
+把這幾個字分開理解會比較穩：
+
+- `INCLUDED`：**無條件**載入檔案
+- `INCLUDE`：`ansi.f` 補上的語法糖，本質上還是 `PARSE-NAME INCLUDED`
+- `REQUIRE <word> file`：只有在 `<word>` 尚未定義時才載入 `file`
+
+所以：
+
+- 寫 library 本身時，偏好 `REQUIRE`
+- 寫使用者端腳本時，偏好 `INCLUDED` / `INCLUDE`
+- 需要可重複執行又不想重複定義時，偏好 `REQUIRE`
+
 ### 11.2 與 `ac-lib3/` 載入的差異
 
 - `lib/` 是 **核心補齊層**：`spf4e` 預設就會帶，命名一致、依賴單純、適合直接 include 進商業程式。
@@ -411,6 +423,14 @@ synonym filename-existent file-exists   \ 把 FILE-EXIST 別名成 filename-exis
 - 日常商業 / 工具類程式 → 優先用 `lib/`。
 - 需要 `~ac` 風格特性（如 `STR2.F` 模板字串、`LOCALS.F`）→ 引入 `ac-lib3/` 對應檔案。
 - 大型應用 / prototype → 看 [17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md) 找對應功能。
+
+`lib/ext/spf4e.f` 另外做了一件重要的事：它會改寫 `find-fullname`，讓 `./...` 類路徑改成**相對目前 source-basepath** 解析，而不是單純相對啟動目錄。這對多檔案工程很重要，因為：
+
+- 你可以在 `subdir/foo.f` 裡 `INCLUDED ./bar.f`
+- `bar.f` 會相對 `foo.f` 所在路徑找
+- 不用要求使用者一定從固定 cwd 啟動 `spf4e`
+
+也就是說，`spf4e` 的 include 行為比純 `spf4` 更接近現代語言的「module-relative import」。
 
 ### 11.3 常見錯誤對照表
 

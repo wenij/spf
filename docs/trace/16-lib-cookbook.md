@@ -576,6 +576,88 @@ HERE 100  S" data.bin" WRITE-BINARY
 | 跨平台 line ending 不一致 | `READ-LINE` 在 Windows 可能吃 `\r\n` | 視需求手動 `S\" \r\n"` 過濾 |
 | 大檔一次讀爆 buffer | `READ-FILE` 不切 chunk | 改用 `READ-LINE` 或 loop 讀固定 size |
 
+### 3.6 `READ-LINE` / `WRITE-FILE` / `ior` 的 stack-effect 圖解
+
+`READ-LINE` 最容易讓人搞混，因為它把三個資訊一起回傳：
+
+- `u2`：實際讀到幾個字元
+- `flag`：是否還有更多資料（到 EOF 會是 false）
+- `ior`：是否發生 I/O error
+
+最小心智模型：
+
+```text
+( c-addr u1 fileid -- u2 flag ior )
+```
+
+讀一行時，建議照這個順序判斷：
+
+1. 先看 `ior`
+2. 再看 `flag`
+3. 最後才處理 `u2`
+
+也就是：
+
+```forth
+: SAFE-READ-LINE ( c-addr u fileid -- u2 flag )
+  READ-LINE THROW         \ THROW 會先處理 ior
+;
+```
+
+對 `WRITE-FILE` 也是一樣：
+
+```text
+( c-addr u fileid -- ior )
+```
+
+所以最穩的用法通常是：
+
+```forth
+S" output.txt" W/O CREATE-FILE THROW >R
+S" hello" R@ WRITE-FILE THROW
+R> CLOSE-FILE THROW
+```
+
+這樣每一步都把 `ior` 轉成 exception，不會留下半成功半失敗的狀態。
+
+### 3.7 `REQUIRE` / `INCLUDE` / `find-fullname` 最小實例
+
+假設有這個結構：
+
+```text
+demo/
+  main.f
+  util.f
+```
+
+`main.f`：
+
+```forth
+INCLUDE ./util.f
+RUN
+```
+
+`util.f`：
+
+```forth
+: RUN  ." ok" CR ;
+```
+
+在 `spf4e` 下，`./util.f` 會相對 `main.f` 的 `source-basepath` 解析；也就是說，你從 repo 根目錄、`demo/` 目錄，甚至別的工作目錄啟動，只要 `main.f` 被正確找到，裡面的 `./util.f` 都還是會相對 `main.f` 自己找。
+
+相對地，`REQUIRE` 更適合寫 library：
+
+```forth
+REQUIRE RUN ./util.f
+```
+
+差異是：
+
+- `INCLUDE` / `INCLUDED`：每次都執行
+- `REQUIRE`：只有 `RUN` 尚未存在時才載入
+
+如果你在寫的是 reusable library，選 `REQUIRE`；如果你在寫的是 top-level app loader，選 `INCLUDE` 通常更直覺。
+
 ---
 
 ## 4. `lib/ext/` 可跑範例
