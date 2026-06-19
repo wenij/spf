@@ -110,7 +110,7 @@ devel/
 
 ## 4. 幾個最重要的作者子樹
 
-本節只保留各作者子樹的定位與典型用途。代表檔案、查找命令與具體使用情境已移到 [17-devel-cookbook.md](17-devel-cookbook.md)。
+本節只保留各作者子樹的定位與典型用途。代表檔案、查找命令與具體使用情境已移到 [18-devel-cookbook.md](18-devel-cookbook.md)。
 
 ### 4.1 `devel/~ac/` — `ac-lib3/` 的母樹與設計草稿區
 
@@ -331,7 +331,7 @@ devel/~ac/
 
 ## 7. 查找範例與需求索引已拆分
 
-本章只保留 `devel/` 的地圖與閱讀策略。具體查找命令、代表檔案與需求導向索引已移到 [17-devel-cookbook.md](17-devel-cookbook.md)。
+本章只保留 `devel/` 的地圖與閱讀策略。具體查找命令、代表檔案與需求導向索引已移到 [18-devel-cookbook.md](18-devel-cookbook.md)。
 
 若你的目標是「我要找某一類檔案或某棵作者子樹的入口」，建議直接讀使用索引；若你的目標是「我要理解 `devel/` 在 repo 裡扮演什麼角色」，留在本章即可。
 
@@ -374,8 +374,8 @@ devel/~ac/
 
 - 若你想知道為什麼 `devel/` 會出現在模組搜尋路徑，回看 [05-io-error-init.md](05-io-error-init.md) 中 `spf_module.f` 的說明。
 - 若你想知道 `fres.f` 如何參與 Windows 資源建構，回看 [06-build-save.md](06-build-save.md)。
-- 若你想理解 `devel/~ac/lib/` 與 `ac-lib3/` 的關係，先看 [16-ac-lib3.md](16-ac-lib3.md)。
-- 若你想直接查某棵作者子樹有哪些代表檔案與查找命令，接著讀 [17-devel-cookbook.md](17-devel-cookbook.md)。
+- 若你想理解 `devel/~ac/lib/` 與 `ac-lib3/` 的關係，先看 [17-ac-lib3.md](17-ac-lib3.md)。
+- 若你想直接查某棵作者子樹有哪些代表檔案與查找命令，接著讀 [18-devel-cookbook.md](18-devel-cookbook.md)。
 - 若你在主系統原始碼中看到 `~pinka` 或其它作者子樹的註記，可回到本章對照其作者工作區背景。
 
 本章的目的是把 `devel/` 變成一張「可導航的地圖」：你不需要一次讀完它，但當你想找 SPF 社群留下的某一類原型、工具或歷史脈絡時，至少知道該先往哪棵子樹走。

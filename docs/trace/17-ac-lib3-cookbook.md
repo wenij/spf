@@ -1,6 +1,6 @@
 # SP-Forth/4 原始碼追蹤 — `ac-lib3/` 使用索引與範例
 
-> 定位：本章是 [16-ac-lib3.md](16-ac-lib3.md) 的配套使用索引。
+> 定位：本章是 [17-ac-lib3.md](17-ac-lib3.md) 的配套使用索引。
 > 主章負責說明 `ac-lib3/` 在 repo 裡的角色；本章則回答「我想用某個 `ac-lib3/` 檔案，應該先看哪些 word、怎麼載入、有哪些前提」。
 
 ---
@@ -652,7 +652,7 @@ S" hello" gzip
 
 ## 7. 與 `lib/`、`devel/` 的對照
 
-`ac-lib3/` 不是 `spf4e` 預設帶的延伸庫；它歷史悠久、依賴多、文件語言夾雜。許多 `ac-lib3/` 提供的功能在 [18-lib.md](18-lib.md)、[18-lib-cookbook.md](18-lib-cookbook.md) 與 [17-devel.md](17-devel.md) 都有更輕量或更現代的替代方案。
+`ac-lib3/` 不是 `spf4e` 預設帶的延伸庫；它歷史悠久、依賴多、文件語言夾雜。許多 `ac-lib3/` 提供的功能在 [16-lib.md](16-lib.md)、[16-lib-cookbook.md](16-lib-cookbook.md) 與 [18-devel.md](18-devel.md) 都有更輕量或更現代的替代方案。
 
 ### 7.1 三大延伸函式庫的角色差異
 
@@ -664,7 +664,7 @@ S" hello" gzip
 | 文件語言 | 英文為主 | 俄文 / 英文混雜 | 視作者而定 |
 | 對 production 友善程度 | 高 | 中-高 | 中-低 |
 
-詳細決策矩陣見 [17-devel-cookbook.md §6](17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel)。
+詳細決策矩陣見 [18-devel-cookbook.md §6](18-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel)。
 
 ### 7.2 從 `ac-lib3/` 角度看 `lib/` 替代方案
 
@@ -728,11 +728,11 @@ S" hello" gzip
 
 | 章節 | 視角 | 何時用 |
 |------|------|--------|
-| [17-devel-cookbook.md §6](17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) | 從「需求」出發：看 `lib/` / `ac-lib3/` / `devel/` 各自有什麼 | 第一次選用、不確定要 include 誰 |
+| [18-devel-cookbook.md §6](18-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) | 從「需求」出發：看 `lib/` / `ac-lib3/` / `devel/` 各自有什麼 | 第一次選用、不確定要 include 誰 |
 | 本章 §7 | 從「`ac-lib3/` 既有方案」出發：看 `lib/` 與 `devel/` 有沒有對應替代 | 已經在用 `ac-lib3/`，想評估能不能換成 `lib/` |
 
 建議的閱讀順序：
 
-1. 先看 [17-devel-cookbook.md §6](17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 決定大方向。
-2. 如果結論是「用 `ac-lib3/`」，回到本章 §7 與 [18-lib.md](18-lib.md)、[18-lib-cookbook.md](18-lib-cookbook.md) 確認哪些 `ac-lib3/` 功能可以同時用 `lib/` 取代、減少 `~ac/lib/...` 依賴。
-3. 如果是要找某個特定作者的 prototype 或範例，看 [17-devel-cookbook.md §3-§4](17-devel-cookbook.md#3-作者子樹使用索引) 的作者子樹索引。
+1. 先看 [18-devel-cookbook.md §6](18-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 決定大方向。
+2. 如果結論是「用 `ac-lib3/`」，回到本章 §7 與 [16-lib.md](16-lib.md)、[16-lib-cookbook.md](16-lib-cookbook.md) 確認哪些 `ac-lib3/` 功能可以同時用 `lib/` 取代、減少 `~ac/lib/...` 依賴。
+3. 如果是要找某個特定作者的 prototype 或範例，看 [18-devel-cookbook.md §3-§4](18-devel-cookbook.md#3-作者子樹使用索引) 的作者子樹索引。

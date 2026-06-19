@@ -1,6 +1,6 @@
 # SP-Forth/4 原始碼追蹤 — `lib/` 使用索引與可跑範例
 
-> 定位：本章是 [18-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/18-lib.md) 的配套 cookbook。
+> 定位：本章是 [16-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/16-lib.md) 的配套 cookbook。
 > 主章負責說明 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略；本章則回答「我想直接用 `lib/` 的某個 word / 某個檔案，怎麼載、怎麼用、有什麼前提」。
 
 ---
@@ -14,7 +14,7 @@
 | 你是在 `spf4` 還是 `spf4e` | `spf4e` 已經內建大部分 `lib/include/ansi.f` 與 `lib/ext/spf4e.f` 的內容；在純 `spf4` 下則要手動 include |
 | 是否已載入 `lib/include/ansi.f` | `CASE` / `DEFER` / `INCLUDE` / `BIN` / `FILE-STATUS` 等 convenience 主要由 `ansi.f` 串起來 |
 | 平台是 POSIX 還是 Windows | `lib/posix/` 與 `lib/win/` 會走不同實作；名稱可能相同、行為不同 |
-| 你要的是「基礎補齊」還是「大型工具箱」 | 如果需求是 registry / COM / ODBC / regex / MIME / template string，多半還是要回 [16-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3-cookbook.md) |
+| 你要的是「基礎補齊」還是「大型工具箱」 | 如果需求是 registry / COM / ODBC / regex / MIME / template string，多半還是要回 [17-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3-cookbook.md) |
 
 最保守的做法：
 
@@ -782,7 +782,7 @@ GENERIC_READ  GENERIC_WRITE  OR  .  \ 印出組合後的 access mask
 
 ### 6.7 `lib/win/spfgui/` — SP-Forth GUI 支援
 
-`spfgui` 是 SP-Forth 的傳統 GUI 工具箱雛形，包含 button、edit、list 等控制項包裝。現代 GUI 開發建議參考 `ac-lib3/win/window/`（[16-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3.md)）。
+`spfgui` 是 SP-Forth 的傳統 GUI 工具箱雛形，包含 button、edit、list 等控制項包裝。現代 GUI 開發建議參考 `ac-lib3/win/window/`（[17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md)）。
 
 ---
 
@@ -810,15 +810,15 @@ GENERIC_READ  GENERIC_WRITE  OR  .  \ 印出組合後的 access mask
 | 字串模板 / regex / MIME |  | ✅ |
 | Windows registry / COM / ODBC / Winsock |  | ✅ |
 | trace / instrumentation / hot patch |  | ✅ |
-| 大型作者實驗 / framework / 範例 |  | 回 [17-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-devel-cookbook.md) |
+| 大型作者實驗 / framework / 範例 |  | 回 [18-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/18-devel-cookbook.md) |
 
-更完整的三方對照見 [17-devel-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 與 [16-ac-lib3-cookbook.md §7](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3-cookbook.md#7-與-lib-devel-的對照)。
+更完整的三方對照見 [18-devel-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/18-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 與 [17-ac-lib3-cookbook.md §7](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3-cookbook.md#7-與-lib-devel-的對照)。
 
 ---
 
 ## 9. 讀完後回到哪裡？
 
-- 想理解 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略，回 [18-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/18-lib.md)。
-- 想找 Windows registry / COM / Winsock / ODBC 等進階整合，回 [16-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3-cookbook.md)。
-- 想找作者子樹的 prototype / framework / 大型範例，回 [17-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-devel-cookbook.md)。
+- 想理解 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略，回 [16-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/16-lib.md)。
+- 想找 Windows registry / COM / Winsock / ODBC 等進階整合，回 [17-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3-cookbook.md)。
+- 想找作者子樹的 prototype / framework / 大型範例，回 [18-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/18-devel-cookbook.md)。
 - 想理解 `spf4` / `spf4e` 的 build 與 image save，回 [06-build-save.md](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md) 與 [15-standalone-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/15-standalone-cookbook.md)。

@@ -1,6 +1,6 @@
 # SP-Forth/4 原始碼追蹤 — `devel/` 使用索引與查找範例
 
-> 定位：本章是 [17-devel.md](17-devel.md) 的配套使用索引。
+> 定位：本章是 [18-devel.md](18-devel.md) 的配套使用索引。
 > 主章說明 `devel/` 的角色與整體地圖；本章則回答「遇到某種需求時，該先看哪棵作者子樹、哪些檔案、怎麼查」。
 
 ---
@@ -759,7 +759,7 @@ A&amp;B &lt;tag&gt; &quot;quoted&quot;<br />
 
 ## 6. 延伸函式庫使用對照：`lib/` vs `ac-lib3/` vs `devel/`
 
-`SP-Forth` 的延伸函式庫分散在三個位置：`lib/`、`ac-lib3/`、`devel/`。這節提供「我看到某個需求時，要先翻哪個資料夾」的決策對照，補齊 [18-lib.md](18-lib.md)、[16-ac-lib3.md](16-ac-lib3.md) 與 [17-devel.md](17-devel.md) 三章的橫向入口。
+`SP-Forth` 的延伸函式庫分散在三個位置：`lib/`、`ac-lib3/`、`devel/`。這節提供「我看到某個需求時，要先翻哪個資料夾」的決策對照，補齊 [16-lib.md](16-lib.md)、[17-ac-lib3.md](17-ac-lib3.md) 與 [18-devel.md](18-devel.md) 三章的橫向入口。
 
 ### 6.1 三者定位一覽
 
@@ -772,7 +772,7 @@ A&amp;B &lt;tag&gt; &quot;quoted&quot;<br />
 | 維護狀態 | 與 `spf4e` 同進退 | 整理過但偏歷史 | 不定期更新，無保證 |
 | 直接用於專案 | ✅ | ✅（注意依賴） | ⚠️ 需先讀懂 |
 | 學習 SPF 設計 | 中 | 中-高 | 高 |
-| 完整章節 | [18-lib.md](18-lib.md) | [16-ac-lib3.md](16-ac-lib3.md) | [17-devel.md](17-devel.md) |
+| 完整章節 | [16-lib.md](16-lib.md) | [17-ac-lib3.md](17-ac-lib3.md) | [18-devel.md](18-devel.md) |
 
 ### 6.2 載入策略對照
 
@@ -781,7 +781,7 @@ A&amp;B &lt;tag&gt; &quot;quoted&quot;<br />
 | 商業 / 工具 / 想一次補齊 | `lib/` | `spf4e` 啟動即用；或在 `spf4` 上 `S" lib/ext/spf4e.f" INCLUDED` |
 | 模板字串、REGISTRY、BSTR、COM | `ac-lib3/` | `S" ac-lib3/STR2.F" INCLUDED` 之類 |
 | 大量字串 / 編碼 / regex / MIME | `ac-lib3/string/` | `S" ac-lib3/string/CONV.F" INCLUDED` |
-| Windows GUI / COM / ODBC / Winsock | `ac-lib3/win/` | 看 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md) §5 |
+| Windows GUI / COM / ODBC / Winsock | `ac-lib3/win/` | 看 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md) §5 |
 | 找另一位作者的特定實驗 | `devel/` | `S" devel/~ygrek/lib/bit.f" INCLUDED`；可能要先解析作者路徑 |
 | 研究 SPF 4 parser 草稿 | `devel/~ac/rationale/` | 直接讀；不一定可載入 |
 
@@ -833,9 +833,9 @@ A&amp;B &lt;tag&gt; &quot;quoted&quot;<br />
 
 ### 6.5 推薦閱讀順序
 
-1. **第一次接觸**：先讀 [18-lib.md](18-lib.md) §1-§3 與 §10，理解 `spf4e` 自帶什麼；需要直接照抄 runnable examples 時接著看 [18-lib-cookbook.md](18-lib-cookbook.md)。
-2. **寫應用**：缺什麼時優先在 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md) 找對應 entry（registry、socket、COM、ODBC 等）；找不到再回頭看 [18-lib.md](18-lib.md) §5-§7 與 [18-lib-cookbook.md](18-lib-cookbook.md) 找 `lib/ext/` 或 `lib/posix/`、`lib/win/` 的替代方案。
-3. **研究底層 / 找靈感**：看本章 §3-§4 找作者子樹的代表 library 範例；想了解設計背景時看 [17-devel.md](17-devel.md) §1-§4。
+1. **第一次接觸**：先讀 [16-lib.md](16-lib.md) §1-§3 與 §10，理解 `spf4e` 自帶什麼；需要直接照抄 runnable examples 時接著看 [16-lib-cookbook.md](16-lib-cookbook.md)。
+2. **寫應用**：缺什麼時優先在 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md) 找對應 entry（registry、socket、COM、ODBC 等）；找不到再回頭看 [16-lib.md](16-lib.md) §5-§7 與 [16-lib-cookbook.md](16-lib-cookbook.md) 找 `lib/ext/` 或 `lib/posix/`、`lib/win/` 的替代方案。
+3. **研究底層 / 找靈感**：看本章 §3-§4 找作者子樹的代表 library 範例；想了解設計背景時看 [18-devel.md](18-devel.md) §1-§4。
 4. **碰到 bug**：先看本章 §1「使用前先確認的事」對應的 `~pinka/spf/debug-throw.f`、`exc-dump.f` 與 `ac-lib3/debug/TRACE.F` 提供的 trace 工具。
 
 ### 6.6 怎麼判斷「這段程式碼應該放哪裡」
@@ -859,7 +859,7 @@ A&amp;B &lt;tag&gt; &quot;quoted&quot;<br />
 
 ## 7. 讀完後回到哪裡？
 
-- 想理解 `devel/` 的定位與整體地圖，回 [17-devel.md](17-devel.md)。
-- 想看整理過、比較可直接使用的延伸函式庫，讀 [16-ac-lib3.md](16-ac-lib3.md) 與 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md)。
+- 想理解 `devel/` 的定位與整體地圖，回 [18-devel.md](18-devel.md)。
+- 想看整理過、比較可直接使用的延伸函式庫，讀 [17-ac-lib3.md](17-ac-lib3.md) 與 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md)。
 - 想追 SPF 本體的載入策略，回 [05-io-error-init.md](05-io-error-init.md)。
 - 想追 Windows 資源建構流程，回 [06-build-save.md](06-build-save.md)。

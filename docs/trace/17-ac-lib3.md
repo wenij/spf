@@ -321,7 +321,7 @@ S" ac-lib3/LOCALS.F" INCLUDED
 S" ac-lib3/string/regexp.f" INCLUDED
 ```
 
-`spf_module.f` 的模組搜尋路徑（見 [05-io-error-init.md](05-io-error-init.md) 的 `+LibraryDirName`）會把相對路徑接到「**可執行檔目錄 + `/devel/`**」之下，因此在某些建構配置裡，`~ac/lib/...` 風格的路徑會被解析到 `devel/~ac/lib/...`（也就是 `ac-lib3/` 的母樹，見 [17-devel.md](17-devel.md)）。
+`spf_module.f` 的模組搜尋路徑（見 [05-io-error-init.md](05-io-error-init.md) 的 `+LibraryDirName`）會把相對路徑接到「**可執行檔目錄 + `/devel/`**」之下，因此在某些建構配置裡，`~ac/lib/...` 風格的路徑會被解析到 `devel/~ac/lib/...`（也就是 `ac-lib3/` 的母樹，見 [18-devel.md](18-devel.md)）。
 
 ### 方式 B：用 `REQUIRE`（去重 + 路徑慣例）
 
@@ -375,7 +375,7 @@ S" ac-lib3/STR2.F" INCLUDED
 
 ### 4.7 詳細用法索引已拆分
 
-本章只保留 `ac-lib3/` 的地圖與閱讀路線；逐項 library 說明、載入範例與堆疊效果備註已移到 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md)。
+本章只保留 `ac-lib3/` 的地圖與閱讀路線；逐項 library 說明、載入範例與堆疊效果備註已移到 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md)。
 
 若你的目標是「我要直接拿某個檔案來用」，建議先讀使用索引；若你的目標是「我要知道 `ac-lib3/` 在 SPF repo 中扮演什麼角色」，留在本章即可。
 
@@ -559,6 +559,6 @@ S" ac-lib3/STR2.F" INCLUDED
 - 若你想理解 SPF 本體的 module / include / 載入策略，先讀 [00-overview.md](00-overview.md) 與 [02-compiler.md](02-compiler.md)。
 - 若你想知道 `devel/` 為什麼也會進模組搜尋路徑，回看 [05-io-error-init.md](05-io-error-init.md) 中 `spf_module.f` 的路徑處理。
 - 若你想理解 build helper（如 `fres.f`）如何與 `devel/` 發生關聯，回看 [06-build-save.md](06-build-save.md)。
-- 若你想直接查某個 `ac-lib3/` 檔案怎麼用，接著讀 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md)。
+- 若你想直接查某個 `ac-lib3/` 檔案怎麼用，接著讀 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md)。
 
 本章的目的不是把 `ac-lib3/` 的每個檔案都拆開逐行追，而是先給你一張足夠實用的「地圖」。真正要深入某個檔案時，再沿著這張地圖找進去，會比直接從目錄樹盲翻有效得多。

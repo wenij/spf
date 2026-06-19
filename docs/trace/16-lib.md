@@ -81,7 +81,7 @@ REQUIRE ANSI-FILE    lib/include/ansi-file.f
 | `lib/include/float2.f` | 浮點延伸，`spf4e.f` 會透過 `FCONSTANT` 需要它 |
 | `lib/include/quotations.f` | `[: ... ;]` quotation 語法 |
 
-實際可跑範例（`CASE` / `DEFER` / `[: ... ;]` / `2CONSTANT` / `FCONSTANT` / `INCLUDE` / `BIN` / `FILE-STATUS` 等）已拆到 [18-lib-cookbook.md §2](file:///Users/wenij/work/forth/spf/docs/trace/18-lib-cookbook.md#2-libinclude-可跑範例)。
+實際可跑範例（`CASE` / `DEFER` / `[: ... ;]` / `2CONSTANT` / `FCONSTANT` / `INCLUDE` / `BIN` / `FILE-STATUS` 等）已拆到 [16-lib-cookbook.md §2](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#2-libinclude-可跑範例)。
 
 ---
 
@@ -110,7 +110,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 - 如果你追的是底層 platform I/O，讀 `src/posix/io.f` 或 `src/win/spf_win_io.f`。
 - 如果你追的是日常 Forth 程式如何用 `S" file" R/O OPEN-FILE`，讀 `lib/include/ansi-file.f`。
 
-完整的 `OPEN-FILE` / `READ-LINE` / `WRITE-FILE` / `BIN` 讀寫範例與常見錯誤對照，已拆到 [18-lib-cookbook.md §3](file:///Users/wenij/work/forth/spf/docs/trace/18-lib-cookbook.md#3-ansi-filef-實戰用法)。
+完整的 `OPEN-FILE` / `READ-LINE` / `WRITE-FILE` / `BIN` 讀寫範例與常見錯誤對照，已拆到 [16-lib-cookbook.md §3](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#3-ansi-filef-實戰用法)。
 
 ---
 
@@ -143,7 +143,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 並且只在 ASCII 範圍做大小寫不敏感，避免破壞 UTF-8。
 
-`caseins.f` / `disasm.f` / `struct.f` / `vocs.f` / `locals.f` / `patch.f` / `onoff.f` / `rnd.f` / `uppercase.f` / `help.f` / `util.f` / `const.f` 的可跑範例，已拆到 [18-lib-cookbook.md §4](file:///Users/wenij/work/forth/spf/docs/trace/18-lib-cookbook.md#4-libext-可跑範例)。
+`caseins.f` / `disasm.f` / `struct.f` / `vocs.f` / `locals.f` / `patch.f` / `onoff.f` / `rnd.f` / `uppercase.f` / `help.f` / `util.f` / `const.f` 的可跑範例，已拆到 [16-lib-cookbook.md §4](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#4-libext-可跑範例)。
 
 ---
 
@@ -173,7 +173,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 這也解釋了為什麼 `src/posix/con_io.f` 裡的 `KEY` / `KEY?` 初始只是 placeholder：完整終端機按鍵支援屬於可選載入的 library 層。
 
-`lib/posix/file.f` / `key.f` / `const.f` 的可跑範例與常見小工具，已拆到 [18-lib-cookbook.md §5](file:///Users/wenij/work/forth/spf/docs/trace/18-lib-cookbook.md#5-libposix-可跑範例)。
+`lib/posix/file.f` / `key.f` / `const.f` 的可跑範例與常見小工具，已拆到 [16-lib-cookbook.md §5](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#5-libposix-可跑範例)。
 
 ---
 
@@ -194,7 +194,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 `lib/win/api-call/` 裡的 `capi.f` / `capi2.f` / `altwinapi.f` 是比較低層的呼叫封裝實驗。一般閱讀 Windows FFI 主線時，先讀 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`；需要比較替代呼叫模型時，再回來看這裡。
 
-`lib/win/file.f` / `mutex.f` / `osver.f` / `winerr.f` / `const.f` 與 `api-call/`、`spfgui/` 的可跑範例，已拆到 [18-lib-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/18-lib-cookbook.md#6-libwin-可跑範例)。
+`lib/win/file.f` / `mutex.f` / `osver.f` / `winerr.f` / `const.f` 與 `api-call/`、`spfgui/` 的可跑範例，已拆到 [16-lib-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#6-libwin-可跑範例)。
 
 ---
 
@@ -217,8 +217,8 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 - `src/` 主系統如何載入與建構，先看 [00-overview.md](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md) 與 [06-build-save.md](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md)。
 - compiler / `INCLUDED` / `REQUIRE` 的核心行為，先看 [02-compiler.md](file:///Users/wenij/work/forth/spf/docs/trace/02-compiler.md)。
 - POSIX / Windows 平台本體，分別看 [04-posix-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/04-posix-platform.md) 與 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md)。
-- `ac-lib3/` 是另一組較大的延伸函式庫，見 [16-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3.md)。
-- `devel/` 是作者工作區與歷史原型集合，見 [17-devel.md](file:///Users/wenij/work/forth/spf/docs/trace/17-devel.md)。
+- `ac-lib3/` 是另一組較大的延伸函式庫，見 [17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md)。
+- `devel/` 是作者工作區與歷史原型集合，見 [18-devel.md](file:///Users/wenij/work/forth/spf/docs/trace/18-devel.md)。
 
 ---
 
@@ -365,7 +365,7 @@ synonym filename-existent file-exists   \ 把 FILE-EXIST 別名成 filename-exis
 
 - 日常商業 / 工具類程式 → 優先用 `lib/`。
 - 需要 `~ac` 風格特性（如 `STR2.F` 模板字串、`LOCALS.F`）→ 引入 `ac-lib3/` 對應檔案。
-- 大型應用 / prototype → 看 [16-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3.md) 找對應功能。
+- 大型應用 / prototype → 看 [17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md) 找對應功能。
 
 ### 11.3 常見錯誤對照表
 
