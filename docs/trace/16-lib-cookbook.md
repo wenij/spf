@@ -393,7 +393,90 @@ GOLDEN FS. CR
 
 > `F.` / `FS.` 是 day 9.03.2005 加入的高階輸出；`F.` 預設 6 位、`FS.` 採整數表示法。`REPRESENT` 與底層 pad 由 `~yGREK` 重構。對應 Forth 標準語意上，`FCONSTANT` / `FVARIABLE` / `FVALUE` 都屬於 optional floating-point word set。 
 
-### 2.11 `ansi.f` 補齊的 convenience — `INCLUDE` / `BIN` / `FILE-STATUS`
+### 2.11 對齊（alignment）與 float / double 的記憶體配置
+
+SP-Forth 在 compiler 端提供一般 data 的 `ALIGN` / `ALIGNED`，而 `float2.f` 另外補了浮點專用的 `FALIGN` / `FALIGNED`。實務上你只要記住：
+
+- 存 cell / double-cell 整數 → `ALIGN`
+- 存 float → `FALIGN`
+- 直接用 `2VARIABLE` / `FVARIABLE` 時，library 已幫你處理好
+
+最小示範：
+
+```forth
+HERE . CR
+1 C,              \ 故意放 1 byte，打亂對齊
+HERE . CR
+ALIGN
+HERE . CR         \ 現在回到 cell 對齊
+```
+
+浮點對齊示範：
+
+```forth
+REQUIRE FCONSTANT lib/include/float2.f
+
+HERE . CR
+1 C,
+HERE . CR
+FALIGN
+HERE . CR         \ 現在回到 float 對齊
+```
+
+若你只是需要一個可存取的浮點位置，直接用 `FVARIABLE` 最穩：
+
+```forth
+FVARIABLE SCALE
+1.25e SCALE F!
+SCALE F@ F. CR
+```
+
+### 2.12 `DEFER` / `[: ... ;]` / `locals` 的相容性陷阱
+
+這三組機制常被初學者混在一起，但它們解的問題不同：
+
+| 機制 | 真正用途 | 典型誤用 |
+|------|----------|----------|
+| `DEFER` / `IS` / `ACTION-OF` | 換掉行為入口 | 拿來當匿名函式 |
+| `[: ... ;]` | 產生匿名 xt | 拿來當可變 callback slot |
+| `lib/ext/locals.f` 的 `{ ... }` | 讓 stack 變可讀 | 嘗試放進 quotation 內 |
+
+`DEFER` 正確用法：callback slot / strategy pattern
+
+```forth
+REQUIRE DEFER lib/include/defer.f
+
+DEFER RENDER
+: TEXT-MODE  ." text" CR ;
+: JSON-MODE  ." json" CR ;
+
+['] TEXT-MODE IS RENDER
+RENDER
+['] JSON-MODE IS RENDER
+RENDER
+```
+
+quotation 正確用法：產生可傳遞的匿名 xt
+
+```forth
+REQUIRE [: lib/include/quotations.f
+
+: APPLY ( xt -- ) EXECUTE ;
+[:  2 3 + . ;] APPLY
+```
+
+**不要這樣做**：
+
+```forth
+\ 概念上錯誤：locals 與 quotation 混用
+\ : BAD { x -- }
+\   [: x . ;] EXECUTE
+\ ;
+```
+
+原因不是語法漂亮不漂亮，而是 `locals` 與 `quotation` 都會建立自己的 frame；目前 `lib/ext/locals.f` 明說不相容這種疊法。
+
+### 2.13 `ansi.f` 補齊的 convenience — `INCLUDE` / `BIN` / `FILE-STATUS`
 
 `ansi.f` 除了把上述 include 串起來，還順便補上幾個常見的便利 word：
 

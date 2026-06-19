@@ -106,6 +106,26 @@ REQUIRE ANSI-FILE    lib/include/ansi-file.f
 - `1.5E` / `3e` 這種帶 exponent 記法的是 **浮點 literal**。
 - Forth 標準的 float word set 用 `( F: before -- after )` 標示獨立的 float stack；因此 `FCONSTANT` / `FVARIABLE` / `FVALUE` 與 `2CONSTANT` / `2VALUE` 不是同一套型別系統。
 
+同樣值得一起理解的是 **alignment**：
+
+- 一般 data space 用 `ALIGN` / `ALIGNED`
+- 浮點資料空間用 `FALIGN` / `FALIGNED`
+- `FVARIABLE` / `FVALUE` 會自動幫你處理 float 對齊
+
+這件事在 x86 上平常不一定立刻炸掉，但在跨平台、結構體、FFI、或你自己手動 `HERE ... ALLOT` 存 float / double-cell 資料時，很容易變成埋雷。最穩的習慣是：
+
+1. 存整數 cell pair → `ALIGN`
+2. 存 float → `FALIGN`
+3. 不確定時優先用 `2VARIABLE` / `FVARIABLE` / `FVALUE`，不要自己硬算 offset
+
+另外，`DEFER` / `[: ... ;]` / `lib/ext/locals.f` 三組也有相容性邊界：
+
+- `DEFER` / `IS` / `ACTION-OF`：安全，純行為抽換
+- `[: ... ;]`：安全，但走獨立 quotation frame
+- `lib/ext/locals.f`：安全，但 **不要**和 quotation 內部混用
+
+也就是說，`DEFER` 比較像「換掉函式入口」，`quotation` 比較像「建立匿名 xt」，`locals` 比較像「改寫 stack 可讀性」；三者用途不同，不要把它們當同一類機制。
+
 實際可跑範例（`CASE` / `DEFER` / `[: ... ;]` / `2CONSTANT` / `FCONSTANT` / `INCLUDE` / `BIN` / `FILE-STATUS` 等）已拆到 [16-lib-cookbook.md §2](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#2-libinclude-可跑範例)。
 
 ---
