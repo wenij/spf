@@ -1,0 +1,824 @@
+# SP-Forth/4 原始碼追蹤 — `lib/` 使用索引與可跑範例
+
+> 定位：本章是 [18-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/18-lib.md) 的配套 cookbook。
+> 主章負責說明 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略；本章則回答「我想直接用 `lib/` 的某個 word / 某個檔案，怎麼載、怎麼用、有什麼前提」。
+
+---
+
+## 1. 使用前先確認的事
+
+`lib/` 與 `ac-lib3/` / `devel/` 不同，它是 **`spf4e` 的核心補齊層**。也就是說：
+
+| 檢查點 | 原因 |
+|--------|------|
+| 你是在 `spf4` 還是 `spf4e` | `spf4e` 已經內建大部分 `lib/include/ansi.f` 與 `lib/ext/spf4e.f` 的內容；在純 `spf4` 下則要手動 include |
+| 是否已載入 `lib/include/ansi.f` | `CASE` / `DEFER` / `INCLUDE` / `BIN` / `FILE-STATUS` 等 convenience 主要由 `ansi.f` 串起來 |
+| 平台是 POSIX 還是 Windows | `lib/posix/` 與 `lib/win/` 會走不同實作；名稱可能相同、行為不同 |
+| 你要的是「基礎補齊」還是「大型工具箱」 | 如果需求是 registry / COM / ODBC / regex / MIME / template string，多半還是要回 [16-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3-cookbook.md) |
+
+最保守的做法：
+
+```forth
+S" lib/ext/spf4e.f" INCLUDED
+```
+
+這樣可以在 `spf4` 上手動補齊出接近 `spf4e` 的行為。
+
+---
+
+## 2. `lib/include/` 可跑範例
+
+### 2.1 `control-case.f` — `CASE` / `OF` / `ENDOF` / `ENDCASE`
+
+Forth-2012 的 `CASE` 直接編譯期展開，沒有 run-time overhead：
+
+```forth
+REQUIRE CASE lib/include/control-case.f
+
+: WEEKDAY-NAME ( n -- c-addr u )
+  CASE
+    1 OF S" Monday"    ENDOF
+    2 OF S" Tuesday"   ENDOF
+    3 OF S" Wednesday" ENDOF
+    4 OF S" Thursday"  ENDOF
+    5 OF S" Friday"    ENDOF
+    6 OF S" Saturday"  ENDOF
+    7 OF S" Sunday"    ENDOF
+    ( default ) S" ???"  \ 都不 match 時的後備
+  ENDCASE
+;
+
+3 WEEKDAY-NAME TYPE CR   \ 印出 Wednesday
+0 WEEKDAY-NAME TYPE CR   \ 印出 ???
+```
+
+`?OF` 是 `OFT` 的同義詞，行為類似「else-if 條件」：
+
+```forth
+: CLASSIFY ( n -- )
+  CASE
+    DUP 0<       OF ." negative" ENDOF
+    DUP 100 >    OF ." large"    ENDOF
+    DUP 50  >=   OF ." medium"   ENDOF
+    ." small"
+  ENDCASE
+;
+```
+
+### 2.2 `string.f` — `/STRING` / `BLANK`
+
+`/STRING` 從字串前/後推進/縮短指標，常用於解析參數、讀檔 line 切割；`BLANK` 寫入空白字元：
+
+```forth
+REQUIRE /STRING lib/include/string.f
+
+\ 把 "key=value" 切成 key / value
+: SPLIT-EQ ( c-addr u -- key-addr key-u val-addr val-u )
+  2DUP [CHAR] = SCAN  ( c-addr u c-addr2 u2 )
+  DUP >R            \ 暫存 = 後面剩餘的長度
+  2SWAP DROP        \ 丟掉 key 末尾之後到 = 的部分
+  2 PICK R@ -       \ 計算 key 長度
+  R>                \ 恢復 val 長度
+;
+
+S" name=Alice" SPLIT-EQ
+\ Stack: ( name 4 Alice 5 )
+```
+
+`BLANK` 適合把 buffer 預先清成空白再填入：
+
+```forth
+CREATE LINE-BUF  80 CHARS ALLOT
+LINE-BUF 80 BLANK
+S" Hello" LINE-BUF SWAP CMOVE
+LINE-BUF 80 TYPE CR
+```
+
+### 2.3 `core-ext.f` — `.R` / `MARKER` / `0>`
+
+`.R` 是固定寬度右對齊輸出，常用於印表格：
+
+```forth
+: .TABLE-ROW ( n1 n2 n3 -- )
+  10 .R ."  | " 12 .R ."  | "  8 .R CR
+;
+
+1 234 56789 .TABLE-ROW
+\ 印出:          1  |          234  |    56789
+```
+
+`MARKER` 用來「記住目前 dictionary 範圍」，之後呼叫一次 marker 即可釋放中間定義過的 word：
+
+```forth
+: LOAD-EXPERIMENT ( -- )
+  S" lib/include/quotations.f" INCLUDED
+  MY-WORD1
+  MY-WORD2
+;
+: UNLOAD-EXPERIMENT ( -- )
+  EXPERIMENT-MARKER
+;
+EXPERIMENT-MARKER
+\ 之後 LOAD-EXPERIMENT 定義的 MY-WORD1/MY-WORD2 都會消失
+```
+
+`0>` 是 `0 >` 的具名版本，常用於型別 guard：
+
+```forth
+: REQUIRE-POSITIVE ( n -- n )
+  DUP 0> IF EXIT THEN
+  S" expected positive" ABORT" "
+;
+```
+
+### 2.4 `facil.f` — `TIME&DATE` / `ms@` / `MS`
+
+`TIME&DATE` 回傳 6 個值（sec min hour day month year），`ms@` 是 millisecond 計數器，`MS` 是暫停 N 毫秒：
+
+```forth
+REQUIRE TIME&DATE lib/include/facil.f
+
+: PRINT-NOW ( -- )
+  TIME&DATE
+  >R >R >R >R        \ 暫存 sec..month
+  ." " . ." /" . ." /" .      \ 印出年/月/日
+  R> R> R> R>         \ 取回 hour..sec
+  ."  " . ." :" . ." :" . CR  \ 印出時:分:秒
+;
+
+: BENCHMARK ( xt -- ms )
+  ms@ >R  EXECUTE  ms@ R> -
+;
+
+: WAIT-1SEC  1000 MS ;
+```
+
+### 2.5 `defer.f` — `DEFER` / `IS` / `ACTION-OF` / `DEFER@` / `DEFER!`
+
+`DEFER` 建立可在執行期換掉行為的 word；`IS`（即 `TO`）用來設定，`ACTION-OF` 取出目前行為：
+
+```forth
+REQUIRE DEFER lib/include/defer.f
+
+DEFER GREETING
+: HELLO    ." Hello!" CR ;
+: BONJOUR  ." Bonjour!" CR ;
+
+: FRENCH-MODE  ['] BONJOUR IS GREETING ;
+: ENGLISH-MODE ['] HELLO   IS GREETING ;
+
+FRENCH-MODE  GREETING    \ Bonjour!
+ENGLISH-MODE GREETING    \ Hello!
+
+ACTION-OF GREETING . CR   \ 印出 HELLO 的 xt
+```
+
+`DEFER@` / `DEFER!` 是 explicit 版本，適合把 xt 存進變數或 table：
+
+```forth
+DEFER MY-CALLBACK
+: SLOT1 ['] HELLO DEFER! MY-CALLBACK ;
+SLOT1  MY-CALLBACK       \ Hello!
+```
+
+### 2.6 `tools.f` — `[IF] / AHEAD / .S`
+
+`[IF] / [ELSE] / [THEN]` 是條件編譯。`tools.f` 的版本會跟著系統 case-sensitivity 走（`spf4e` 下用 `caseins.f` 的規則）：
+
+```forth
+REQUIRE [IF] lib/include/tools.f
+
+[DEFINED] WINAPI: [IF]
+: HOST-OS S" Windows" ;
+[ELSE]
+: HOST-OS S" POSIX" ;
+[THEN]
+
+HOST-OS TYPE CR
+```
+
+`AHEAD` 是「無條件向前跳」，等於 `ELSE` 的單邊版本：
+
+```forth
+: TEST-AHEAD ( flag -- )
+  IF  AHEAD  ." no" THEN
+  ." yes" CR
+;
+```
+
+`.S` 直接把目前 stack 印出來（深度與值），比手寫 `DUP .` 方便：
+
+```forth
+1 2 3 .S      \ <3> 1 2 3
+4 5 .S        \ <5> 1 2 3 4 5
+DROP DROP DROP DROP DROP .S  \ <0>
+```
+
+### 2.7 `wordlist-tools.f` — `NAME>INTERPRET` / `NAME>COMPILE` / `TRAVERSE-WORDLIST`
+
+這組用於在 runtime 走訪 / 取用 dictionary 內的 name token：
+
+```forth
+REQUIRE NAME>COMPILE lib/include/wordlist-tools.f
+
+: PRINT-COMPILERS ( -- )
+  S" compiler" TRAVERSE-WORDLIST
+  [: ." : " NAME>STRING TYPE CR ;]
+;
+
+: GET-COMPILE-XT ( c-addr u -- xt | 0 )
+  FIND NIP DUP IF NAME>COMPILE NIP THEN ;
+```
+
+### 2.8 `quotations.f` — `[: ... ;]`
+
+`[: ... ;]` 是 Forth-2012 風格的 quotation（lambda），回傳可重複執行的 xt：
+
+```forth
+REQUIRE [: lib/include/quotations.f
+
+: APPLY3 ( xt -- )
+  DUP EXECUTE  DUP EXECUTE  EXECUTE ;
+
+: SQUARE ( n -- n^2 ) DUP * ;
+: CUBE   ( n -- n^2*n ) DUP SQUARE * ;
+
+' SQUARE APPLY3   \ 三次執行 SQUARE（4 → 16 → 256 → 65536）
+DROP
+```
+
+> 注意：`locals.f` 的 `{ ... }` local 變數目前不相容 quotation 內部（兩者底層是不同 frame 機制）；要兩者並用時可改用 stack。
+
+### 2.9 `double.f` — `2CONSTANT` / `2VARIABLE` / `2VALUE` / `D.R`
+
+`2CONSTANT` 與 `2VARIABLE` 對應 ANS Forth 的 double-cell 數值：
+
+```forth
+REQUIRE D0< lib/include/double.f
+
+2CONSTANT PI-APPROX
+\ PI ≈ 3.14159265358979323846
+\ 取前 16 位有效數字：3 141592653589793 2CONSTANT PI
+
+2VARIABLE COUNTER
+0. COUNTER 2!
+
+: BUMP-COUNTER ( -- )  COUNTER 2@ 1. D+ COUNTER 2! ;
+: SHOW-COUNTER ( -- )  COUNTER 2@ D. CR ;
+
+BUMP-COUNTER BUMP-COUNTER
+SHOW-COUNTER
+```
+
+`2VALUE` 是 double-cell 版的可改值變數（要 `TO` 設定）：
+
+```forth
+2VALUE CURRENT-POS
+1.5E CURRENT-POS 2!     \ 用 double-cell 存浮點
+```
+
+`D.R` 與 `.R` 類似但處理 double-cell：
+
+```forth
+12345678901234. 20 D.R
+\ 印出右對齊到 20 字元的 double-cell 數字
+```
+
+### 2.10 `float2.f` — `FCONSTANT` / `F.` / `FS.`
+
+`float2.f` 補齊 SP-Forth 的浮點延伸，`spf4e` 透過 `FCONSTANT` 自動引入：
+
+```forth
+REQUIRE FCONSTANT lib/include/float2.f
+
+FCONSTANT PI2  3.141592653589793e
+FCONSTANT E    2.718281828459045e
+
+: CIRCUMFERENCE ( r -- )  2e F* PI2 F* FS. CR ;
+1.5e CIRCUMFERENCE        \ 9.4247...
+```
+
+> `F.` / `FS.` 是 day 9.03.2005 加入的高階輸出；`F.` 預設 6 位、`FS.` 採整數表示法。`REPRESENT` 與底層 pad 由 `~yGREK` 重構。
+
+### 2.11 `ansi.f` 補齊的 convenience — `INCLUDE` / `BIN` / `FILE-STATUS`
+
+`ansi.f` 除了把上述 include 串起來，還順便補上幾個常見的便利 word：
+
+```forth
+REQUIRE lib/include/ansi.f
+
+\ INCLUDE：支援解析名稱的 INCLUDED
+INCLUDE my-source.f    \ 等同 S" my-source.f" INCLUDED
+
+\ BIN：fam flag 給 file access mode 加 binary 標記（POSIX 上是 identity）
+S" data.bin" R/W BIN OPEN-FILE
+
+\ FILE-STATUS：把 FILE-EXIST 轉成標準 ( x ior ) 形式
+S" data.bin" FILE-STATUS  . .   \ 0 0 表示檔案存在、無錯誤
+```
+
+---
+
+## 3. `ansi-file.f` 實戰用法
+
+### 3.1 行為差異：kernel 版 vs ansi 版
+
+載入 `ansi-file.f` 之前後，`OPEN-FILE` 的語意差異：
+
+| 項目 | 載入前（kernel） | 載入後（ansi-file） |
+|------|------------------|---------------------|
+| 呼叫形式 | `S" file.z" 0 OPEN-FILE`（須有 `\0`）| `S" file" R/O OPEN-FILE`（標準 form）|
+| 檔名長度 | 自動截到第一個 `0` 為止 | 用 length cell，不被 `0` 截斷 |
+| 內部 buffer | 無 | 動態配置 `PFILENAME`，size 隨用過的最大檔名成長 |
+| `READ-FILE` 與 `WRITE-FILE` | 同樣只看 ASCIIZ | 包裝為 `c-addr u` 形式 |
+
+> 結論：在 `spf4e` 或已 `REQUIRE lib/include/ansi.f` 的環境下，**永遠用 `c-addr u` 形式**寫檔案 I/O；kernel 內部的 ASCIIZ 形式保留是為底層相容性。
+
+### 3.2 完整讀檔範例：行讀直到 EOF
+
+```forth
+REQUIRE ANSI-FILE lib/include/ansi.f
+
+CREATE LINE-BUF  1024 CHARS ALLOT
+
+: PROCESS-LINE ( c-addr u -- )  TYPE CR ;
+
+: READ-ALL-LINES ( c-addr u -- )
+  R/O OPEN-FILE THROW  ( fileid )
+  BEGIN
+    LINE-BUF 1024  ( c-addr maxlen )
+    2 PICK READ-LINE ( c-addr u flag ior fileid )
+  WHILE
+    ( -- c-addr u flag ior fileid )  \ 還沒到 EOF
+    ROT DROP  2SWAP 2DROP              \ 丟 flag 與 ior，剩 ( c-addr u )
+    PROCESS-LINE
+  REPEAT
+  ( c-addr u flag ior fileid )
+  2DROP 2DROP  DROP                   \ 清乾淨
+  CLOSE-FILE THROW
+;
+
+S" mydata.txt" READ-ALL-LINES
+```
+
+> 為什麼 `READ-LINE` 的 stack effect 這麼長？因為它要同時回傳「已讀長度」、「是否到 EOF」、「錯誤碼」與「fileid」給後續控制流。
+
+### 3.3 完整寫檔範例：把整段 string 一次寫入
+
+```forth
+: WRITE-STRING-TO ( c-addr u filename-c-addr filename-u -- )
+  W/O CREATE-FILE THROW  ( fileid c-addr u )
+  2SWAP                  ( filename-c-addr filename-u fileid c-addr u )
+  WRITE-FILE THROW        ( filename-c-addr filename-u fileid ior )
+  2DROP  CLOSE-FILE THROW
+;
+
+S" Hello, world!" S" greeting.txt" WRITE-STRING-TO
+```
+
+### 3.4 二進位讀寫範例
+
+加 `BIN` flag 確保在文字 / 二進位行為可能不同的平台（如 Windows）走二進位模式：
+
+```forth
+: WRITE-BINARY ( c-addr u filename-c-addr filename-u -- )
+  W/O BIN CREATE-FILE THROW  >R
+  2SWAP R> WRITE-FILE THROW
+  CLOSE-FILE THROW
+;
+
+\ 把 buffer 寫成 raw bytes
+HERE 100  S" data.bin" WRITE-BINARY
+```
+
+### 3.5 常見錯誤與對應
+
+| 症狀 | 原因 | 修正 |
+|------|------|------|
+| `OPEN-FILE` 沒讀完整檔名 | 載入 ansi 之前用 ASCIIZ 寫法 | `REQUIRE lib/include/ansi.f` |
+| 寫檔出現 garbage | 沒 flush / `WRITE-FILE` 只寫部分 | loop 到 `WRITE-FILE` 全部寫完才關 |
+| 跨平台 line ending 不一致 | `READ-LINE` 在 Windows 可能吃 `\r\n` | 視需求手動 `S\" \r\n"` 過濾 |
+| 大檔一次讀爆 buffer | `READ-FILE` 不切 chunk | 改用 `READ-LINE` 或 loop 讀固定 size |
+
+---
+
+## 4. `lib/ext/` 可跑範例
+
+### 4.1 `caseins.f` — 大小寫不敏感搜尋的切換
+
+```forth
+S" lib/ext/caseins.f" INCLUDED
+
+\ 預設 ON（已透過 CASE-INS ON）
+: HELLO  ." hello" CR ;
+: hello  ." hello (lower)" CR ;
+
+HELLO        \ 因為大小寫不敏感，找到第一個定義，印 hello
+CASE-INS OFF
+HELLO        \ case-sensitive，印 hello (lower)
+CASE-INS ON  \ 切回
+```
+
+> 切回 `spf4` 風格時整個 dictionary 搜尋變嚴格；建議除非有特殊需要，否則保持 ON。
+
+### 4.2 `disasm.f` — `SEE` 反組譯
+
+`spf4e.f` 會把 `SEE` 暴露成 disasm-voc 內的 word；底層走 `disasm.f` 的 Intel-style 反組譯器：
+
+```forth
+S" lib/ext/disasm.f" INCLUDED
+
+: SQUARE  DUP * ;
+SEE SQUARE   \ 印出 SQUARE 的組語碼（常數 inline、呼叫 frame）
+```
+
+對於 IMMEDIATE word：
+
+```forth
+SEE IF      \ 印出 IF 的 inline 邏輯
+```
+
+### 4.3 `struct.f` — `STRUCT:` 結構定義
+
+`STRUCT:` 會建立一個 vocabulary，把欄位名包進去，並以 offset 形式提供：
+
+```forth
+S" lib/ext/struct.f" INCLUDED
+
+STRUCT: POINT
+  CELL -- .x
+  CELL -- .y
+;STRUCT
+
+\ 建立 1 個 POINT 實例
+HERE  POINT /SIZE ALLOT   CONSTANT MY-POINT
+
+\ 設定欄位
+10 MY-POINT .x !
+20 MY-POINT .y !
+
+\ 取欄位
+MY-POINT .x @  MY-POINT .y @  . .  \ 印 20 10
+
+\ 也可放在 CREATE 後面
+CREATE P2  POINT /SIZE ALLOT
+P2 .x !
+```
+
+> 結構欄位名是 deferred 的 offset accessor，呼叫 `.x` 會編譯成「`addr + offset`」的直接碼，沒有額外 lookup overhead。
+
+### 4.4 `vocs.f` — `VOCS` 與 `NextNFA`
+
+`VOCS` 把目前 dictionary chain 內的 wordlist 全列出，並標示每個 wordlist 是否在某個 word 內被定義：
+
+```forth
+S" lib/ext/vocs.f" INCLUDED
+VOCS   \ 印出所有 wordlist 名稱與其「is the main vocabulary / defined in ...」標記
+```
+
+`NextNFA` 是反向走訪 dictionary 的低階工具，常用於 disassembler / debugger / cross-reference：
+
+```forth
+: PRINT-DICTIONARY ( -- )
+  0 NextNFA              ( nfa2 | 0 )
+  BEGIN ?DUP WHILE
+    DUP NAME>STRING TYPE CR
+    NextNFA
+  REPEAT DROP
+;
+```
+
+### 4.5 `locals.f` — `{ ... -- ... }` 與 `LOCAL`
+
+```forth
+S" lib/ext/locals.f" INCLUDED
+
+: HYPOT { a b -- c }
+  a a *  b b *  F+  FSQRT  -> c
+  c
+;
+
+3e 4e HYPOT FS.       \ 5.0
+```
+
+未初始化的 local 寫成 `\ name`：
+
+```forth
+: ACCUMULATE { n \ acc -- sum }
+  0 -> acc
+  n 0 ?DO  I  -> acc +  LOOP
+  acc
+;
+```
+
+> 與 `[: ... ;]` quotation **不相容**（兩者底層 frame 模型不同），混用時會編譯失敗或行為未定義。實際工作上通常選一種風格貫穿整個專案。
+
+### 4.6 `patch.f` — `REPLACE-WORD` 直接改 hot path
+
+`REPLACE-WORD` 在目標 word 的入口寫入 `JMP`，把呼叫 redirect 到新 word：
+
+```forth
+S" lib/ext/patch.f" INCLUDED
+
+: ORIGINAL ( -- ) ." original" CR ;
+: REPLACED ( -- ) ." replaced" CR ;
+
+['] REPLACED ['] ORIGINAL REPLACE-WORD
+ORIGINAL          \ 印 replaced
+
+\ 還原：把 ORIGINAL 重新定義
+: ORIGINAL ( -- ) ." original again" CR ;
+ORIGINAL          \ 印 original again
+```
+
+> 用在 hot path instrumentation、tracing、AOP 風格的「攔截+還原」。**不要**在 production 程式碼亂用，這會破壞 dictionary 的一致性。
+
+### 4.7 `onoff.f` — `ON` / `OFF` flag helper
+
+```forth
+S" lib/ext/onoff.f" INCLUDED
+
+VARIABLE DEBUG?
+: SET-DEBUG  TRUE DEBUG? ON ;
+: CLR-DEBUG  FALSE DEBUG? OFF ;
+```
+
+> 單獨的 `lib/ext/onoff.f` 沒什麼負擔，可以當作「小工具 include」直接 INCLUDE 到自己的小專案。
+
+### 4.8 `rnd.f` — `RANDOM` / `CHOOSE` / `RANDOMIZE`
+
+```forth
+S" lib/ext/rnd.f" INCLUDED
+
+12345 SEED                  \ 固定 seed → 可重現的序列
+10 CHOOSE                   \ 0..9 的隨機數
+RANDOMIZE                   \ 用 ms@ 重新 seed
+
+\ 模擬擲骰子
+: D6  6 CHOOSE 1+ ;
+: ROLL-3D6  D6 D6 D6  . . . ;
+```
+
+> 這是 LCG，不是密碼學等級的隨機。crypto / Monte Carlo 嚴肅應用請改用 `devel/~ygrek/lib/neilbawd/mersenne.f`（Mersenne Twister）。
+
+### 4.9 `uppercase.f` — `UPPERCASE` / `CEQUAL-U` / `CHAR-UPPERCASE`
+
+```forth
+S" lib/ext/uppercase.f" INCLUDED
+
+CREATE BUF  16 CHARS ALLOT
+S" Hello, World" BUF SWAP CMOVE
+BUF 12 UPPERCASE   \ 原地轉大寫
+BUF 12 TYPE CR      \ HELLO, WORLD
+
+\ 忽略大小寫比對
+S" search-wordlist" S" SEARCH-WORDLIST" CEQUAL-U .  \ -1 (true)
+```
+
+`CHAR-UPPERCASE` 對超過 `0x7F` 的 byte 是 implementation-defined；純 ASCII 範圍才安全。
+
+### 4.10 `help.f` — `***` 區塊的線上說明
+
+`help.f` 提供 `***` / `***g:` 等 word 來收集行內 help block，並在 `HELP` 觸發時印出：
+
+```forth
+S" lib/ext/help.f" INCLUDED
+
+: GREETING
+  *** 印出 hello 並換行
+  ." Hello!" CR
+;
+```
+
+> 純 SP-Forth 歷史工具，新文件建議用獨立 `*.md` 加 grep，不要依賴這個機制。
+
+### 4.11 `util.f` — `TryOpenFile` 模組 / library 路徑搜尋
+
+`util.f` 提供「先在 cwd 找，再去 module path 找，最後去 library path 找」的 helper：
+
+```forth
+S" lib/ext/util.f" INCLUDED
+
+S" lib/ext/caseins.f" R/O TryOpenFile
+\ Stack: ( handle 0 ) 或 ( 0 ior )
+\ 在 spf4 / spf4e 啟動時通常直接命中 cwd
+```
+
+這個機制解釋了為什麼在 SP-Forth 裡直接 `S" some.f" R/O OPEN-FILE` 也能成功，即使目前工作目錄不是 source 所在目錄。
+
+### 4.12 `const.f` — 動態常數 vocabulary 機制
+
+`lib/ext/const.f` 本身定義 `WINCONST` vocabulary 與 `SEARCH-CONST`，但**更常被引用**是因為它把常數表 `.const` 載入成可搜尋 wordlist：
+
+```forth
+\ 在 spf4e 下載入常數（lib/win/const.f 或 lib/posix/const.f 會自動執行）
+S" O_RDONLY" FIND NIP 0= [IF] S" lib/posix/const/linux.const" INCLUDED [THEN]
+O_RDONLY .     \ 印出 POSIX O_RDONLY 的數值
+```
+
+> 大多數使用者**不需要**直接 include `lib/ext/const.f`；`lib/win/const.f` 與 `lib/posix/const.f` 會在載入 `ansi.f` 後自動選邊帶入。
+
+---
+
+## 5. `lib/posix/` 可跑範例
+
+### 5.1 自動載入：`RENAME-FILE` 走 POSIX 路徑
+
+在 `spf4e` 或 `spf4 + lib/include/ansi.f` 環境下，呼叫 `RENAME-FILE` 會走 `lib/posix/file.f`：
+
+```forth
+S" old-name.txt" S" new-name.txt" RENAME-FILE THROW
+```
+
+> 注意：`lib/posix/file.f` 的 `RENAME-FILE` 內部仍用 `( )) rename` 把 stack 直接餵給 libc `rename(2)`，所以 stack effect 與 file.f 宣告一致，但實作上會丟掉 filename length 依賴 ASCIIZ（file.f 開頭有 `.( FIXME: do not require ascii-zeroed strings!) CR` 的警告）。實務上搭配 `lib/include/ansi-file.f` 使用即可。
+
+### 5.2 `lib/posix/key.f` 完整載入
+
+`lib/posix/key.f` 不會被 `ansi.f` 自動載入。需要在互動模式需要即時按鍵時手動 include：
+
+```forth
+S" lib/posix/key.f" INCLUDED
+
+\ 之後 KEY 不再阻塞等 Enter，而是立刻回傳一個字元
+KEY EMIT
+```
+
+> 注意：`KEY-TERMIOS` 會把 terminal 切到 raw 模式。batch / pipe 模式（stdin 不是 tty）下會失敗或行為不確定；可用 `ISATTY?` 之類的工具先檢查。
+
+### 5.3 POSIX 常數表
+
+`lib/posix/const.f` 透過 `ADD-CONST-VOC` 把 `lib/posix/const/linux.const` 載入成可搜尋的 wordlist：
+
+```forth
+S" lib/posix/const.f" INCLUDED
+
+\ 之後可直接用常數名搜尋
+O_RDONLY  .        \ 印出 O_RDONLY 的數值
+O_WRONLY  .        \ 印出 O_WRONLY 的數值
+O_CREAT   .        \ 印出 O_CREAT 的數值
+```
+
+> 如果常數查不到，通常代表 `linux.const` 還沒重新生成（內容依賴 `/usr/include` 與核心 header）。重新生成流程參考 `lib/posix/const/` 目錄下的腳本。
+
+### 5.4 POSIX 平台常見小工具
+
+| 需求 | 入口 |
+|------|------|
+| termios 單鍵輸入 | `lib/posix/key.f` |
+| 重新編譯 / 重新產生常數表 | `lib/posix/const/` |
+| `O_*` / `S_*` / `PROT_*` 等旗標 | `lib/posix/const.f` 載入 `linux.const` |
+| 改寫 `RENAME-FILE` 用 ASCIIZ 以外的字串 | 已內建在 `lib/posix/file.f` |
+
+---
+
+## 6. `lib/win/` 可跑範例
+
+### 6.1 `lib/win/file.f` — 額外的檔案工具
+
+`lib/win/file.f` 提供 `RENAME-FILE` / `TOEND-FILE` / `COPY-FILE` / `COPY-FILE-OVER` / `DELETE-FOLDER` 等高階檔案工具，底層呼叫 `MoveFileA` / `CopyFileA` / `RemoveDirectoryA`：
+
+```forth
+S" lib/win/file.f" INCLUDED
+
+\ 複製（若目標存在則失敗）
+S" source.txt" S" dest.txt" COPY-FILE THROW
+
+\ 強制覆蓋（FALSE flag = bFailIfExists = FALSE）
+S" source.txt" S" dest.txt" COPY-FILE-OVER THROW
+
+\ 移到檔案末尾
+S" log.txt" R/O OPEN-FILE THROW >R
+R@ TOEND-FILE THROW
+R> CLOSE-FILE THROW
+
+\ 刪除空資料夾
+S" empty-dir" DELETE-FOLDER THROW
+```
+
+> 若要取得絕對路徑，要用 `lib/posix/file.f` 提供的 `ExtFilePathName`（POSIX 平台限定）；Windows 版本可改呼叫 `GetFullPathNameA`（在 `ac-lib3/win/file/` 或直接 `WINAPI:` 宣告）。
+
+### 6.2 `lib/win/mutex.f` — 跨 process 互斥
+
+```forth
+S" lib/win/mutex.f" INCLUDED
+
+: GRAB-LOCK ( -- handle ior )
+  S" my-app-lock" FALSE CREATE-MUTEX
+;
+
+: WAIT-LOCK ( handle -- ior )
+  5000 SWAP WAIT         \ 5 秒逾時
+;
+
+: RELEASE-LOCK ( handle -- ior )
+  RELEASE-MUTEX
+;
+```
+
+典型用法：
+
+```forth
+GRAB-LOCK THROW >R
+R@ WAIT-LOCK THROW
+\ ... critical section ...
+R> RELEASE-LOCK THROW
+CLOSE-MUTEX THROW
+```
+
+> 真正應用上會把 handle 存在全域變數或物件裡；`lib/win/mutex.f` 的 API 與 Win32 的 `CreateMutexA` / `WaitForSingleObject` / `ReleaseMutex` 一一對應，呼叫順序與逾時常數請參考 MS 文件。
+
+### 6.3 `lib/win/osver.f` — OS 版本偵測
+
+```forth
+S" lib/win/osver.f" INCLUDED
+
+OSVER CASE
+  OS_WIN95 OF ." Windows 95"     ENDOF
+  OS_WIN98 OF ." Windows 98"     ENDOF
+  OS_WINNT OF ." Windows NT 系"  ENDOF
+  ." 未知"
+ENDCASE
+```
+
+> 對現代 Windows 10/11，平台會被歸到 `OS_WINNT`；major / minor / build 仍可用 `OSVERSIONINFO` 結構 + `GetVersionExA` 進一步查，但建議改用更精確的 `RtlGetVersion` 或 WMI 查詢。
+
+### 6.4 `lib/win/winerr.f` — `DECODE-ERROR` 與 `WTHROW`
+
+`lib/win/winerr.f` 把 `GetLastError` 的代碼轉成可讀訊息，並把 `WIN_ERROR` 範圍的代碼塞進 `DECODE-ERROR`：
+
+```forth
+S" lib/win/winerr.f" INCLUDED
+
+: OPEN-OR-COMPLAIN ( c-addr u -- fileid ior )
+  R/W OPEN-FILE
+  DUP IF  DROP  GetLastError WIN_ERROR DECODE-ERROR TYPE  THEN
+;
+```
+
+> 想要 trace-level 自動 throw，可以用 `WTHROW`：它會把目前的 Windows error 拋成 Forth exception，可以被 `CATCH` 接住。
+
+### 6.5 `lib/win/const.f` — Windows 常數表
+
+`lib/win/const.f` 透過 `ADD-CONST-VOC` 載入 `lib/win/winconst/windows.const`，把 `ERROR_*`、`FILE_SHARE_*`、`GENERIC_*` 之類的常數變成可搜尋 word：
+
+```forth
+S" lib/win/const.f" INCLUDED
+
+\ 載入後可這樣用
+GENERIC_READ  GENERIC_WRITE  OR  .  \ 印出組合後的 access mask
+```
+
+> `windows.const` 內容來自頭文件掃描；若 Windows SDK 升級，請用 `lib/win/winconst/` 目錄下的腳本重新生成。
+
+### 6.6 `lib/win/api-call/` — 替代 API 呼叫模型
+
+| 檔案 | 角色 |
+|------|------|
+| `capi.f` | C-style API call 實驗 |
+| `capi2.f` | 簡化版 C-style API call |
+| `altwinapi.f` | 替代 `WINAPI:` 與 `API-CALL` 的封裝 |
+
+除非要在 `spf4`（無 `WINAPI:`）下做 Win32 開發，否則主線仍走 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`。
+
+### 6.7 `lib/win/spfgui/` — SP-Forth GUI 支援
+
+`spfgui` 是 SP-Forth 的傳統 GUI 工具箱雛形，包含 button、edit、list 等控制項包裝。現代 GUI 開發建議參考 `ac-lib3/win/window/`（[16-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3.md)）。
+
+---
+
+## 7. `spf4e` 最常見載入組合
+
+| 場景 | 推薦載入 |
+|------|----------|
+| 在 `spf4` 上補齊成 `spf4e` 常用能力 | `S" lib/ext/spf4e.f" INCLUDED` |
+| 只要 ANS word set | `S" lib/include/ansi.f" INCLUDED` |
+| 只要 quotation | `REQUIRE [: lib/include/quotations.f` |
+| 只要 locals | `S" lib/ext/locals.f" INCLUDED` |
+| 只要大小寫不敏感搜尋 | `S" lib/ext/caseins.f" INCLUDED` |
+| 只要 Windows mutex | `S" lib/win/mutex.f" INCLUDED` |
+| 只要 POSIX 即時按鍵 | `S" lib/posix/key.f" INCLUDED` |
+
+---
+
+## 8. `lib/` vs `ac-lib3/` 的最小依賴選擇
+
+| 需求 | 優先選 `lib/` | 什麼時候要升級到 `ac-lib3/` |
+|------|--------------|------------------------------|
+| CASE / DEFER / quotation / locals | ✅ | 幾乎不用 |
+| 檔案 I/O / `RENAME-FILE` / `COPY-FILE` | ✅ | 需要 Windows registry / INI 時 |
+| 大小寫不敏感搜尋 / `SEE` | ✅ | 不用 |
+| 字串模板 / regex / MIME |  | ✅ |
+| Windows registry / COM / ODBC / Winsock |  | ✅ |
+| trace / instrumentation / hot patch |  | ✅ |
+| 大型作者實驗 / framework / 範例 |  | 回 [17-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-devel-cookbook.md) |
+
+更完整的三方對照見 [17-devel-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 與 [16-ac-lib3-cookbook.md §7](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3-cookbook.md#7-與-lib-devel-的對照)。
+
+---
+
+## 9. 讀完後回到哪裡？
+
+- 想理解 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略，回 [18-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/18-lib.md)。
+- 想找 Windows registry / COM / Winsock / ODBC 等進階整合，回 [16-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/16-ac-lib3-cookbook.md)。
+- 想找作者子樹的 prototype / framework / 大型範例，回 [17-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-devel-cookbook.md)。
+- 想理解 `spf4` / `spf4e` 的 build 與 image save，回 [06-build-save.md](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md) 與 [15-standalone-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/15-standalone-cookbook.md)。

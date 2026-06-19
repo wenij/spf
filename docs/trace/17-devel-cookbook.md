@@ -833,8 +833,8 @@ A&amp;B &lt;tag&gt; &quot;quoted&quot;<br />
 
 ### 6.5 推薦閱讀順序
 
-1. **第一次接觸**：先讀 [18-lib.md](18-lib.md) §1-§3 與 §10，理解 `spf4e` 自帶什麼。
-2. **寫應用**：缺什麼時優先在 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md) 找對應 entry（registry、socket、COM、ODBC 等）；找不到再回頭看 [18-lib.md](18-lib.md) §5-§7 找 `lib/ext/` 或 `lib/posix/`、`lib/win/` 的替代方案。
+1. **第一次接觸**：先讀 [18-lib.md](18-lib.md) §1-§3 與 §10，理解 `spf4e` 自帶什麼；需要直接照抄 runnable examples 時接著看 [18-lib-cookbook.md](18-lib-cookbook.md)。
+2. **寫應用**：缺什麼時優先在 [16-ac-lib3-cookbook.md](16-ac-lib3-cookbook.md) 找對應 entry（registry、socket、COM、ODBC 等）；找不到再回頭看 [18-lib.md](18-lib.md) §5-§7 與 [18-lib-cookbook.md](18-lib-cookbook.md) 找 `lib/ext/` 或 `lib/posix/`、`lib/win/` 的替代方案。
 3. **研究底層 / 找靈感**：看本章 §3-§4 找作者子樹的代表 library 範例；想了解設計背景時看 [17-devel.md](17-devel.md) §1-§4。
 4. **碰到 bug**：先看本章 §1「使用前先確認的事」對應的 `~pinka/spf/debug-throw.f`、`exc-dump.f` 與 `ac-lib3/debug/TRACE.F` 提供的 trace 工具。
 

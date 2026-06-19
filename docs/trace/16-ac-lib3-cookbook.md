@@ -652,7 +652,7 @@ S" hello" gzip
 
 ## 7. 與 `lib/`、`devel/` 的對照
 
-`ac-lib3/` 不是 `spf4e` 預設帶的延伸庫；它歷史悠久、依賴多、文件語言夾雜。許多 `ac-lib3/` 提供的功能在 [18-lib.md](18-lib.md) 與 [17-devel.md](17-devel.md) 都有更輕量或更現代的替代方案。
+`ac-lib3/` 不是 `spf4e` 預設帶的延伸庫；它歷史悠久、依賴多、文件語言夾雜。許多 `ac-lib3/` 提供的功能在 [18-lib.md](18-lib.md)、[18-lib-cookbook.md](18-lib-cookbook.md) 與 [17-devel.md](17-devel.md) 都有更輕量或更現代的替代方案。
 
 ### 7.1 三大延伸函式庫的角色差異
 
@@ -734,5 +734,5 @@ S" hello" gzip
 建議的閱讀順序：
 
 1. 先看 [17-devel-cookbook.md §6](17-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 決定大方向。
-2. 如果結論是「用 `ac-lib3/`」，回到本章 §7 與 [18-lib.md](18-lib.md) 確認哪些 `ac-lib3/` 功能可以同時用 `lib/` 取代、減少 `~ac/lib/...` 依賴。
+2. 如果結論是「用 `ac-lib3/`」，回到本章 §7 與 [18-lib.md](18-lib.md)、[18-lib-cookbook.md](18-lib-cookbook.md) 確認哪些 `ac-lib3/` 功能可以同時用 `lib/` 取代、減少 `~ac/lib/...` 依賴。
 3. 如果是要找某個特定作者的 prototype 或範例，看 [17-devel-cookbook.md §3-§4](17-devel-cookbook.md#3-作者子樹使用索引) 的作者子樹索引。
