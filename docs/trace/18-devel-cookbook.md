@@ -20,7 +20,7 @@
 
 | 範圍 | 建議環境 | 平台 | 外部依賴 |
 |------|----------|------|----------|
-| `~nn/lib`、`~ygrek/lib` 小型 library | `spf4` 或 `spf4e`，依檔頭載入依賴 | 多數可跨平台 | 通常無 |
+| `~nn/lib`、`~ygrek/lib` 小型 library | `spf4` 或 `spf4e`，依檔頭載入依賴 | 多數可跨平台 | 多半只依賴 repo 內其它作者樹或 `lib/ext` |
 | `~ac/lib` 源流範例 | `spf4` 或 `spf4e`，且可解析作者路徑 | POSIX / Windows | 視 `REQUIRE` 而定 |
 | `~day` / `~micro` framework 或 app | 原作者預期環境 | 多為 Windows | Win32 API、資源檔或外部 DLL |
 | `rationale/`、`samples/` | 以閱讀為主 | 不一定可執行 | 無保證 |

@@ -898,7 +898,12 @@ S" lib/ext/caseins.f" R/O TryOpenFile
 
 ```forth
 \ 在 spf4e 下載入常數（lib/win/const.f 或 lib/posix/const.f 會自動執行）
-S" O_RDONLY" FIND NIP 0= [IF] S" lib/posix/const/linux.const" INCLUDED [THEN]
+REQUIRE [IF] lib/include/tools.f
+
+[UNDEFINED] O_RDONLY [IF]
+  S" lib/posix/const/linux.const" INCLUDED
+[THEN]
+
 O_RDONLY .     \ 印出 POSIX O_RDONLY 的數值
 ```
 
