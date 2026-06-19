@@ -95,10 +95,15 @@ REQUIRE /STRING lib/include/string.f
 \ 把 "key=value" 切成 key / value
 : SPLIT-EQ ( c-addr u -- key-addr key-u val-addr val-u )
   2DUP [CHAR] = SCAN  ( c-addr u c-addr2 u2 )
-  DUP >R            \ 暫存 = 後面剩餘的長度
-  2SWAP DROP        \ 丟掉 key 末尾之後到 = 的部分
-  2 PICK R@ -       \ 計算 key 長度
-  R>                \ 恢復 val 長度
+  DUP 0= IF          \ 找不到 = 時，value 視為空字串
+    2DROP 2DUP + 0 EXIT
+  THEN
+  >R                 \ R: 包含 = 在內的剩餘長度
+  NIP                \ 保留原始位址與 = 的位址
+  2DUP SWAP - >R     \ R: rest-u key-u
+  1+                 \ value 從 = 的下一個字元開始
+  R> SWAP
+  R> 1-
 ;
 
 S" name=Alice" SPLIT-EQ
@@ -130,16 +135,17 @@ LINE-BUF 80 TYPE CR
 `MARKER` 用來「記住目前 dictionary 範圍」，之後呼叫一次 marker 即可釋放中間定義過的 word：
 
 ```forth
-: LOAD-EXPERIMENT ( -- )
-  S" lib/include/quotations.f" INCLUDED
-  MY-WORD1
-  MY-WORD2
-;
-: UNLOAD-EXPERIMENT ( -- )
-  EXPERIMENT-MARKER
-;
+REQUIRE MARKER lib/include/core-ext.f
+
+MARKER EXPERIMENT-MARKER
+
+: MY-WORD1 ( -- ) ." word1" CR ;
+: MY-WORD2 ( -- ) ." word2" CR ;
+
+MY-WORD1 MY-WORD2
+
 EXPERIMENT-MARKER
-\ 之後 LOAD-EXPERIMENT 定義的 MY-WORD1/MY-WORD2 都會消失
+\ 之後 MY-WORD1 / MY-WORD2 都會從 dictionary 消失
 ```
 
 `0>` 是 `0 >` 的具名版本，常用於型別 guard：
@@ -160,10 +166,8 @@ REQUIRE TIME&DATE lib/include/facil.f
 
 : PRINT-NOW ( -- )
   TIME&DATE
-  >R >R >R >R        \ 暫存 sec..month
-  ." " . ." /" . ." /" .      \ 印出年/月/日
-  R> R> R> R>         \ 取回 hour..sec
-  ."  " . ." :" . ." :" . CR  \ 印出時:分:秒
+  . ." /" . ." /" .          \ year/month/day
+  ."  " . ." :" . ." :" . CR \ hour:min:sec
 ;
 
 : BENCHMARK ( xt -- ms )
@@ -197,7 +201,7 @@ ACTION-OF GREETING . CR   \ 印出 HELLO 的 xt
 
 ```forth
 DEFER MY-CALLBACK
-: SLOT1 ['] HELLO DEFER! MY-CALLBACK ;
+: SLOT1 ( -- ) ['] HELLO ['] MY-CALLBACK DEFER! ;
 SLOT1  MY-CALLBACK       \ Hello!
 ```
 
@@ -241,14 +245,22 @@ DROP DROP DROP DROP DROP .S  \ <0>
 ```forth
 REQUIRE NAME>COMPILE lib/include/wordlist-tools.f
 
-: PRINT-COMPILERS ( -- )
-  S" compiler" TRAVERSE-WORDLIST
-  [: ." : " NAME>STRING TYPE CR ;]
+: PRINT-NAME ( nt -- true )
+  ." : " NAME>STRING TYPE CR
+  TRUE
+;
+
+: PRINT-CURRENT-WORDLIST ( -- )
+  ['] PRINT-NAME GET-CURRENT TRAVERSE-WORDLIST
 ;
 
 : GET-COMPILE-XT ( c-addr u -- xt | 0 )
-  FIND NIP DUP IF NAME>COMPILE NIP THEN ;
+  FIND-NAME DUP IF NAME>COMPILE NIP THEN ;
 ```
+
+`TRAVERSE-WORDLIST` 的 callback stack effect 是 `( i*x nt -- j*x flag )`；回傳 true 代表繼續走訪，false 代表停止。上例用 `GET-CURRENT` 走訪目前 wordlist，並用 `NAME>STRING` 印出每個 name token。
+
+`NAME>COMPILE` 也吃 name token，所以查字時要用 `FIND-NAME`，不要把 `FIND` / `SFIND` 回傳的 xt 直接交給它。
 
 ### 2.8 `quotations.f` — `[: ... ;]`
 
@@ -353,10 +365,10 @@ LIMIT-D D. CR
 ```forth
 REQUIRE FCONSTANT lib/include/float2.f
 
-FCONSTANT PI2  3.141592653589793e
-FCONSTANT E    2.718281828459045e
+3.141592653589793e FCONSTANT PI2
+2.718281828459045e FCONSTANT E
 
-: CIRCUMFERENCE ( r -- )  2e F* PI2 F* FS. CR ;
+: CIRCUMFERENCE ( F: r -- )  2e F* PI2 F* FS. CR ;
 1.5e CIRCUMFERENCE        \ 9.4247...
 ```
 
@@ -396,7 +408,7 @@ GOLDEN FS. CR
 25e C>F F. CR
 
 \ 圓面積
-: CIRCLE-AREA ( F: r -- area )  DUP F* PI2 F* ;
+: CIRCLE-AREA ( F: r -- area )  FDUP F* PI2 F* ;
 3e CIRCLE-AREA F. CR
 ```
 

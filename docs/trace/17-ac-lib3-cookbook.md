@@ -817,6 +817,12 @@ DumpDS
 
 用途：封裝 `zlib.dll`，提供 zlib deflate、gzip 輸出與 CRC32。
 
+載入：
+
+```forth
+S" ac-lib3/win/arc/gzip/zlib.f" INCLUDED
+```
+
 範例：
 
 ```forth
@@ -835,7 +841,8 @@ S" hello" gzip
 
 - `zlib_compress` / `zlib_uncompress` 使用 zlib 格式。
 - `gzip` / `gzip_write` 輸出 gzip 格式。
-- 需要 `zlib.dll`。
+- 需要 `zlib.dll`，而且要能被 Windows loader 找到（例如放在執行檔同目錄或系統 PATH）。
+- `zlib_compress` / `gzip` 會回傳新的 buffer；正式程式要確認記憶體釋放策略，不要只在 REPL 測試時忽略。
 
 最常見的分法：
 

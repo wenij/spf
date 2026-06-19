@@ -718,6 +718,10 @@ DEMO-GCD
 作者樹：`devel/~ygrek/`
 代表性：這個檔案展示以 byte buffer 當 bit array 使用的工具，常見於壓縮、編碼、crypto 或 protocol 類程式。
 
+相依：`~ygrek/lib/bit.f` 會再載入 `~pinka/lib/ext/basics.f`、`~profit/lib/testing.f`、`lib/ext/locals.f`。
+
+如果你的 SPF search path 沒有把 `~pinka` / `~profit` 對到 `devel/~pinka` / `devel/~profit`，先修正路徑或改用明確的 `devel/...` 載入方式。
+
 ```forth
 \ demo-ygrek-bit.f
 \ 在 byte buffer 裡設定、讀取與列印 bit。
