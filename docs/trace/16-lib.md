@@ -267,6 +267,20 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 `lib/win/api-call/` 裡的 `capi.f` / `capi2.f` / `altwinapi.f` 是比較低層的呼叫封裝實驗。一般閱讀 Windows FFI 主線時，先讀 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`；需要比較替代呼叫模型時，再回來看這裡。
 
+可以用一條線把三者分清楚：
+
+- `WINAPI:`：標準 SP-Forth Win32 宣告方式，優先使用
+- `CAPI:` / `CVAPI:`：給 **C calling convention** 或可變參數函式用
+- `altwinapi.f`：仍叫 `WINAPI:`，但底層換成另一套 call stub
+
+也就是說，只有當你碰到：
+
+1. `msvcrt.dll` 這類 C-style API
+2. `sprintf` / `strstr` 類型的 libc 函式
+3. 舊環境下對 `WINAPI:` call stub 有相容性需求
+
+才需要進入 `lib/win/api-call/`。一般 Win32 開發還是先走 `src/win/spf_win_defwords.f` 的標準 `WINAPI:`。
+
 從架構角度看，`lib/win/` 比 `ac-lib3/win/` 更接近「**小而直接的 platform adapter**」：
 
 - `lib/win/const.f`：把 Windows SDK 常數表轉成可搜尋 vocabulary

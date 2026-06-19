@@ -1115,6 +1115,37 @@ GENERIC_READ  GENERIC_WRITE  OR  .  \ 印出組合後的 access mask
 
 除非要在 `spf4`（無 `WINAPI:`）下做 Win32 開發，否則主線仍走 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`。
 
+最小可跑的 `CAPI:` 例子其實就在原始檔註解裡：
+
+```forth
+S" lib/win/api-call/capi2.f" INCLUDED
+
+2 CAPI: strstr msvcrt.dll
+
+Z" forth" Z" sp-forth" strstr . CR
+```
+
+這個例子表示：
+
+- `strstr` 來自 `msvcrt.dll`
+- 它吃兩個 C string 參數，所以宣告時前面放 `2`
+- `CAPI:` 會在呼叫後自動把那兩個參數從 data stack 清掉
+
+如果你要的是 **可變參數** 類函式，原始檔建議用 `CVAPI:`：
+
+```forth
+S" lib/win/api-call/capi2.f" INCLUDED
+
+CVAPI: sprintf msvcrt.dll
+```
+
+> 這一類函式最容易在 format string / 緩衝區長度上踩雷。若不是在維護既有 Win32F / SPF codebase，建議少碰。
+
+`altwinapi.f` 的定位不是新語法，而是「**用另一套 call stub 實作同名 `WINAPI:`**」。因此它比較像相容性實驗，不是新的 high-level API。讀法上：
+
+1. 先學標準 `WINAPI:`
+2. 只有在某個 DLL / callback / 參數轉移模式不合時，才回頭看 `altwinapi.f`
+
 ### 6.7 最小 `WINAPI:` + 常數實例
 
 如果你的需求只是「宣告一個 Win32 API，搭配幾個常數呼叫」，那其實 `lib/win/const.f` + 既有 `WINAPI:` 就夠了：
