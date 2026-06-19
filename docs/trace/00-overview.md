@@ -443,6 +443,17 @@ RET
 
 ### 7.1 推薦閱讀順序
 
+如果你只想快速掌握後段四組章節的分工，先看這張表：
+
+| 群組 | 主章 | cookbook | 用途 |
+|------|------|----------|------|
+| 15 | `15-standalone-executable.md` | `15-standalone-cookbook.md` | standalone executable、entry point、SAVE recipe |
+| 16 | `16-lib.md` | `16-lib-cookbook.md` | `spf4e` 標準補齊層、platform adapter、最小依賴例子 |
+| 17 | `17-ac-lib3.md` | `17-ac-lib3-cookbook.md` | 大型歷史延伸庫、Windows 整合、應用層工具箱 |
+| 18 | `18-devel.md` | `18-devel-cookbook.md` | 作者工作區、prototype、framework/app 範例 |
+
+理解這張表後，再讀下面的細順序：
+
 1. `00-overview.md`：先建立全貌與術語。
 2. `11-forth-compilation.md`：若你對 `STATE`、`:/;`、`IMMEDIATE`、`POSTPONE`、`COMPILE,`、`DOES>` 還不熟，先補這章。
 3. `08-append-a.md`：若你對 IA-32 組語與 SP-Forth assembler 還不熟，先補這章。
