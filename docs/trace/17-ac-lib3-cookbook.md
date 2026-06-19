@@ -572,6 +572,14 @@ S" log.txt" R/W OPEN-FILE-SHARED-DELETE THROW DROP
 
 如果你是在做備份、log collector、清理工具，這一組通常會比 `win/process/` 或 `win/access/` 更早打開。
 
+一個典型工作流會是：
+
+1. `FIND-FILES-R` 先把 `*.log` 或 `*.txt` 全掃出來
+2. 對每個檔用 `GET-FILETIME` 決定新舊
+3. 真要打開時才決定要不要用 `OPEN-FILE-SHARED-DELETE`
+
+也就是 `win/file/` 比較像「列舉 + metadata + 特殊 share mode」的工具箱，不是單純的 `OPEN-FILE` 替代品。
+
 ### `win/process/`
 
 用途：啟動外部 process、等待 process、列舉、kill、pipe、child I/O。
@@ -647,6 +655,20 @@ ComExit
 - 要 Outlook / IE / XML / ADO 自動化 → 直接進 `samples/`
 - 要自己暴露 COM object 給外部程式呼叫 → `com_server*.f`
 
+如果你要從 `samples/` 開始找入口，最實用的順序是：
+
+| 需求 | 先開哪個 sample |
+|------|------------------|
+| 檔案系統自動化 | `FileSystemObject.f` |
+| 資料庫 / recordset | `ado.f`、`ado1.f`、`oledb.f` |
+| Outlook 郵件/行事曆 | `outlook.f`、`outlook2.f`、`outlook3.f` |
+| IE / browser automation | `ie.f`、`ie2.f` |
+| XML DOM | `xml.f` |
+| CDO / mail 送信 | `cdo*.f` |
+| .NET interop | `dotnet.f` |
+
+也就是說，`win/com/samples/` 最好不是從檔名排序硬讀，而是依「你要自動化哪個產品」切入。
+
 ### `win/window/`
 
 用途：Win32 GUI、dialog、listbox、tray icon、popup menu、window enumeration。
@@ -688,6 +710,15 @@ S" ac-lib3/win/window/enumwindows.f" INCLUDED
 : .WND ( hwnd -- ) . CR ;
 ['] .WND ForEachWindow DROP
 ```
+
+若要決定先打哪個檔，可以這樣想：
+
+- 要基本視窗 / show / hide / subclass → `WINDOW.F`
+- 要 modal / dialog template → `DIALOG.F`、`dialog_creating.f`
+- 要 listbox → `LISTBOX.F`
+- 要 tray icon → `notify_icon.f`
+- 要 popup menu → `popupmenu.f`
+- 要觀察目前桌面狀態 → `enumwindows.f`
 
 ### `win/winsock/`
 
