@@ -6,6 +6,8 @@
 > 1. `devel/` 為什麼存在？
 > 2. 哪些子樹真的值得看？
 > 3. 它和 `src/`、`ac-lib3/` 的關係是什麼？
+>
+> 如果你要先把 `lib/`、`ac-lib3/`、`devel/` 的大方向排好，再回來讀本章，先看 [00-overview.md §2.1a](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md#21a-補充目錄ac-lib3-與-devel)。
 
 ---
 

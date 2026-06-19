@@ -3,6 +3,8 @@
 > 定位：本章不追 kernel / compiler 本體，而是介紹 repo 內另一塊很實用、但容易被忽略的資產：`ac-lib3/`。
 >
 > 如果 `src/` 是 SPF 本體，`ac-lib3/` 更像是 **應用開發時可直接拿來用的函式庫與工具箱**。
+>
+> 如果你還不確定應該先看 `lib/`、`ac-lib3/` 還是 `devel/`，先回 [00-overview.md §2.1a](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md#21a-補充目錄ac-lib3-與-devel) 看三者對照表。
 
 ---
 

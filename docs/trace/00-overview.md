@@ -152,6 +152,20 @@ src/
 
 除了 `src/`、`lib/`、`docs/` 這些主體目錄之外，repo 裡還有兩個很容易讓初次閱讀者疑惑、但其實很值得認識的補充區：`ac-lib3/` 與 `devel/`。
 
+先用一張表把三者的定位釘住：
+
+| 區域 | 角色 | 何時先讀 | 代表章節 |
+|------|------|----------|----------|
+| `lib/` | `spf4e` 的標準補齊層；最接近主系統的第一圈延伸 | 你在追 build flow、ANS word set、platform adapter、最小依賴工具時 | [16-lib.md](16-lib.md)、[16-lib-cookbook.md](16-lib-cookbook.md) |
+| `ac-lib3/` | 大型歷史延伸函式庫與工具箱；偏應用層與 Windows 系統整合 | 你在找字串模板、regex、MIME、registry、COM、Winsock、ODBC 等現成方案時 | [17-ac-lib3.md](17-ac-lib3.md)、[17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md) |
+| `devel/` | 作者工作區、prototype、framework、歷史實驗與大型範例專案 | 你在找設計草稿、作者子樹、未正式收編的 library 或完整應用範例時 | [18-devel.md](18-devel.md)、[18-devel-cookbook.md](18-devel-cookbook.md) |
+
+如果只記一條閱讀順序，記這條就夠：
+
+```text
+src -> lib -> ac-lib3 -> devel
+```
+
 #### `ac-lib3/`：額外函式庫與工具集合
 
 `ac-lib3/` 不是 kernel / compiler 的主程式碼，也不是 `spf.f` 建構時必載的核心目錄；更精確地說，它是一組**額外函式庫、工具與平台擴充集合**。從目錄內容來看，它主要包含：

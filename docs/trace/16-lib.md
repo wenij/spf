@@ -2,6 +2,8 @@
 
 > 定位：本章補足 `lib/` 目錄與 `spf4e` extended build 的閱讀入口。
 > 如果 `src/` 是系統本體，`lib/` 就是把核心補成較完整使用環境的標準字、工具字與平台延伸集合。
+>
+> 如果你想一次比較 `lib/`、`ac-lib3/`、`devel/` 三者的角色與使用邊界，先看 [00-overview.md §2.1a](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md#21a-補充目錄ac-lib3-與-devel)。
 
 ---
 
