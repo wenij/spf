@@ -192,6 +192,20 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 `caseins.f` / `disasm.f` / `struct.f` / `vocs.f` / `locals.f` / `patch.f` / `onoff.f` / `rnd.f` / `uppercase.f` / `help.f` / `util.f` / `const.f` 的可跑範例，已拆到 [16-lib-cookbook.md §4](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#4-libext-可跑範例)。
 
+其中 `lib/ext/const.f` 很值得特別記住：它不是單純把某個檔案 `INCLUDED` 進來而已，而是**把常數表掛到找字流程裡**。換句話說，`windows.const` / `linux.const` 載入後，`GENERIC_READ` / `O_RDONLY` 這種名字會像一般 word 一樣被找到，最後在編譯期變成 literal。
+
+這也是為什麼 `lib/win/const.f` / `lib/posix/const.f` 看起來很短，實際上卻很重要：
+
+- `lib/ext/const.f`：提供 vocabulary、`SEARCH-CONST`、`ADD-CONST-VOC`
+- `lib/win/const.f`：把 `windows.const` 掛進來
+- `lib/posix/const.f`：把 `linux.const` 掛進來
+
+因此常數表的真正分工是：
+
+1. `src/win/*` / `src/posix/*`：底層 API 與平台實作
+2. `lib/*/const.f`：把平台常數變成高層 Forth 可直接用的名字
+3. 你的應用程式：直接寫 `GENERIC_READ`、`O_CREAT`、`FILE_SHARE_READ`
+
 ---
 
 ## 6. `lib/posix/`：POSIX 可選輔助

@@ -876,6 +876,83 @@ O_RDONLY .     \ 印出 POSIX O_RDONLY 的數值
 
 > 大多數使用者**不需要**直接 include `lib/ext/const.f`；`lib/win/const.f` 與 `lib/posix/const.f` 會在載入 `ansi.f` 後自動選邊帶入。
 
+如果你想直接看它怎麼工作，可以拆成三步：
+
+#### 4.12.1 直接查詢常數名
+
+```forth
+S" lib/ext/const.f" INCLUDED
+S" lib/posix/const/linux.const" ADD-CONST-VOC
+
+S" O_RDONLY" SEARCH-CONST . . CR
+```
+
+`SEARCH-CONST` 的回傳是：
+
+- `u -1`：找到常數值 `u`
+- `0`：找不到
+
+也就是說，這一層還只是「字串查表」。
+
+#### 4.12.2 真正好用的地方：掛進 `NOTFOUND`
+
+`lib/ext/const.f` 真正厲害的地方不是 `SEARCH-CONST`，而是它改寫了 `NOTFOUND`：
+
+1. 一般 dictionary 找不到某個名字
+2. `NOTFOUND` 被觸發
+3. `NOTFOUND` 再去 `ChainOfConst` 內的常數表找
+4. 找到的話，就把值編譯成 literal
+
+所以載入 `lib/win/const.f` 後你可以直接這樣寫：
+
+```forth
+S" lib/win/const.f" INCLUDED
+
+: ACCESS-MASK ( -- u )
+  GENERIC_READ GENERIC_WRITE OR
+;
+
+ACCESS-MASK . CR
+```
+
+這裡的 `GENERIC_READ` / `GENERIC_WRITE` 並不是一般 colon word，而是透過常數表 + `NOTFOUND` hook 變成可用的 literal。
+
+#### 4.12.3 平台差異：POSIX vs Windows
+
+POSIX：
+
+```forth
+S" lib/posix/const.f" INCLUDED
+O_RDONLY . CR
+O_CREAT  . CR
+```
+
+Windows：
+
+```forth
+S" lib/win/const.f" INCLUDED
+GENERIC_READ    . CR
+FILE_SHARE_READ . CR
+```
+
+不要混用：
+
+- POSIX 下找 `GENERIC_READ` 不會有意義
+- Windows 下找 `O_RDONLY` 也不是你想要的 API 常數語意
+
+#### 4.12.4 何時用 `REMOVE-ALL-CONSTANTS`
+
+`REMOVE-ALL-CONSTANTS` 會把 `ChainOfConst` 掛上的常數表全部 free 掉：
+
+```forth
+REMOVE-ALL-CONSTANTS
+```
+
+這通常只在兩種情況有用：
+
+1. 你在同一個 session 內想重新載入另一份 `.const` 檔
+2. 你在做常數表相關的測試，不想讓前一次載入結果污染下一次
+
 ---
 
 ## 5. `lib/posix/` 可跑範例
