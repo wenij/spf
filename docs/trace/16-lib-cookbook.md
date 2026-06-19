@@ -1038,7 +1038,28 @@ GENERIC_READ  GENERIC_WRITE  OR  .  \ 印出組合後的 access mask
 
 除非要在 `spf4`（無 `WINAPI:`）下做 Win32 開發，否則主線仍走 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`。
 
-### 6.7 `lib/win/spfgui/` — SP-Forth GUI 支援
+### 6.7 最小 `WINAPI:` + 常數實例
+
+如果你的需求只是「宣告一個 Win32 API，搭配幾個常數呼叫」，那其實 `lib/win/const.f` + 既有 `WINAPI:` 就夠了：
+
+```forth
+S" lib/win/const.f" INCLUDED
+
+WINAPI: GetStdHandle KERNEL32.DLL
+
+STD_OUTPUT_HANDLE GetStdHandle DROP . CR
+```
+
+另一個常見場景是把 access / share flags 組起來：
+
+```forth
+GENERIC_READ GENERIC_WRITE OR . CR
+FILE_SHARE_READ FILE_SHARE_WRITE OR . CR
+```
+
+也就是說，`lib/win/const.f` 的角色不是取代 `WINAPI:`，而是讓 `WINAPI:` 宣告後面真正可用。
+
+### 6.8 `lib/win/spfgui/` — SP-Forth GUI 支援
 
 `spfgui` 是 SP-Forth 的傳統 GUI 工具箱雛形，包含 button、edit、list 等控制項包裝。現代 GUI 開發建議參考 `ac-lib3/win/window/`（[17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md)）。
 

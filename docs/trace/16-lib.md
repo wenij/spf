@@ -218,6 +218,18 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 這也解釋了為什麼 `src/posix/con_io.f` 裡的 `KEY` / `KEY?` 初始只是 placeholder：完整終端機按鍵支援屬於可選載入的 library 層。
 
+這一區最重要的不是 API 數量，而是**平台差異被收斂到檔名相似的兩套 library**：
+
+- POSIX 常數：`lib/posix/const.f` → `linux.const`
+- Windows 常數：`lib/win/const.f` → `windows.const`
+- 兩邊都叫 `RENAME-FILE`、`COPY-FILE`，但底層分別走 libc / Win32 API
+
+所以你在寫跨平台程式時，真正要做的是：
+
+1. 先決定「常數來自哪邊」
+2. 再決定「檔案 / console 行為來自哪邊」
+3. 最後才決定需不需要碰更低層的 `src/posix/*` / `src/win/*`
+
 `lib/posix/file.f` / `key.f` / `const.f` 的可跑範例與常見小工具，已拆到 [16-lib-cookbook.md §5](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#5-libposix-可跑範例)。
 
 ---
@@ -238,6 +250,15 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 | `lib/win/winconst/` | 產生 / 保存 Windows 常數表 |
 
 `lib/win/api-call/` 裡的 `capi.f` / `capi2.f` / `altwinapi.f` 是比較低層的呼叫封裝實驗。一般閱讀 Windows FFI 主線時，先讀 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`；需要比較替代呼叫模型時，再回來看這裡。
+
+從架構角度看，`lib/win/` 比 `ac-lib3/win/` 更接近「**小而直接的 platform adapter**」：
+
+- `lib/win/const.f`：把 Windows SDK 常數表轉成可搜尋 vocabulary
+- `lib/win/file.f`：補基本檔案輔助
+- `lib/win/mutex.f`：補同步 primitive
+- `lib/win/winerr.f`：把 Win32 error 轉成可讀訊息
+
+如果你只是想把 `WINAPI:` 宣告寫得比較順手、拿到 `GENERIC_READ` / `FILE_SHARE_READ` 這類常數、再補一點檔案 / mutex / error helper，`lib/win/` 通常夠用；只有當你需要 registry / COM / Winsock / ODBC / service 這類較厚的整合時，才升級到 `ac-lib3/win/`。
 
 `lib/win/file.f` / `mutex.f` / `osver.f` / `winerr.f` / `const.f` 與 `api-call/`、`spfgui/` 的可跑範例，已拆到 [16-lib-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#6-libwin-可跑範例)。
 
