@@ -90,6 +90,12 @@ diff -u ac-lib3/STR2.F devel/~ac/lib/STR2.F
 - 想比較 `ac-lib3/` 整理版與 `devel/~ac/lib/` 工作版的命名、結構或依賴差異。
 - 想理解 SPF 4 parser / translator 的歷史設計背景。
 
+入口判斷：
+
+- 想追 `ac-lib3` 某個檔案的母樹 → 先打 `devel/~ac/lib/對應檔名`
+- 想追 SPF 4 設計草稿 → 先打 `devel/~ac/rationale/`
+- 想直接拿 library 來用 → 通常先回 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md)，只有要看源流時才回這裡
+
 ### `devel/~pinka/`
 
 用途：研究 SPF 核心補強、例外處理、compiler、wordlist、storage、FFI 等深層實驗。
@@ -120,6 +126,12 @@ find devel/~pinka/spf/compiler -type f | sort
 - 想追 `THROW` / exception dump 的替代做法。
 - 想找 `fix-accept`、`fix-refill` 類問題的修補原型。
 - 想研究 compiler / wordlist / storage 的非正式擴充。
+
+入口判斷：
+
+- 遇到例外處理 / dump 問題 → 先打 `exc-dump.f`
+- 遇到輸入系統怪行為 → 先打 `fix-accept.f` / `fix-refill.f`
+- 想看編譯器實驗而不是正式主線 → 再進 `spf/compiler/`
 
 ### `devel/~yz/`
 
@@ -178,6 +190,12 @@ find devel/~day/wfl -maxdepth 3 -type f | sort
 - 想看 GUI / application framework 類設計如何在 SPF 裡長出來。
 - 想找比單一函式庫更完整的應用骨架。
 
+入口判斷：
+
+- 先想看 OOP 核心 → `joop/oop.f`
+- 先想看 framework 骨架 → `wfl/wfl.f`
+- 先想看完整 app / subsystem → `hype3/`、`fsim/`
+
 ### `devel/~mak/`
 
 用途：研究 compiler、assembler、optimizer、語言前端/後端實驗。
@@ -235,6 +253,12 @@ find devel/~ygrek/spf -type f | sort
 - 想看 SPF 本體外圍的自動補完 / included / 測試補強。
 - 想看「library + project」混合風格的作者工作樹。
 
+入口判斷：
+
+- 要小而完整的 utility → 優先看 `lib/`
+- 要 SPF 本體外圍工具 → 看 `spf/`
+- 要可執行專案 → 看 `prog/`
+
 ### `devel/~micro/`
 
 用途：看 SPF 被拿來做完整應用，而不只是小型函式庫。
@@ -262,6 +286,12 @@ find devel/~micro/SHEDULER -maxdepth 2 -type f | sort
 - 想看包含 `MAKE.F`、設定檔、文件、發佈目錄的完整工具程式。
 - 想研究 scheduler / reminder / file utility 類應用。
 - 想理解 SPF 在 WWW / scheduler / file utility 類領域的應用範圍。
+
+入口判斷：
+
+- 想學「完整應用怎麼排目錄」→ 先看 `SHEDULER/`
+- 想看單一功能工具 → `DELETER/`、`filetrunc/`
+- 想看 SPF 做 web 類工具 → `wwwlib/`
 
 ### `devel/~nn/`
 
@@ -291,6 +321,31 @@ find devel/~nn/class -type f | sort
 - 想比較不同作者如何做 base64 / unicode / file / web 工具。
 - 想看另一套 class / library 組織方式。
 - 想找偏個人函式庫倉，而非單一專案的樣本。
+
+入口判斷：
+
+- 想找日常通用函式庫 → 先看 `lib/`
+- 想找 class 系統 → `class/`
+- 想找 web / script / unicode → 對應子目錄逐個開
+
+---
+
+## 3.5 framework / app / prototype 要怎麼讀？
+
+`devel/` 最容易讓人迷路的不是「不知道有哪些檔」，而是不知道**先開哪個檔**。簡單分：
+
+| 類型 | 先看 | 再看 |
+|------|------|------|
+| framework | 入口主檔（如 `wfl.f`、`oop.f`） | `examples/` 或 `win/` 子目錄 |
+| 完整 app | `README` / `MAKE.F` / 主檔 | 設定檔、資源、發佈目錄 |
+| prototype / 草稿 | 最頂層單檔 | 相鄰註解與同目錄實驗檔 |
+
+具體建議：
+
+- `~day/wfl/`：先 `wfl.f`，再 `examples/`
+- `~day/joop/`：先 `oop.f`，再 `win/`
+- `~micro/SHEDULER/`：先 `MAKE.F` 或主檔，再看設定 / 文件
+- `~ac/rationale/`：直接從單檔讀，不用先找 examples
 
 ---
 
