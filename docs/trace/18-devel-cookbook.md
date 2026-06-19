@@ -16,6 +16,15 @@
 | 是否偏 Windows | `~yz/`、`~micro/`、`~day/`、部分 `~ac/` 內容會直接碰 Win32 API |
 | 是否只是草稿或原型 | `rationale/`、`samples/`、個人實驗目錄不一定可直接執行 |
 
+範例驗證狀態：
+
+| 範圍 | 建議環境 | 平台 | 外部依賴 |
+|------|----------|------|----------|
+| `~nn/lib`、`~ygrek/lib` 小型 library | `spf4` 或 `spf4e`，依檔頭載入依賴 | 多數可跨平台 | 通常無 |
+| `~ac/lib` 源流範例 | `spf4` 或 `spf4e`，且可解析作者路徑 | POSIX / Windows | 視 `REQUIRE` 而定 |
+| `~day` / `~micro` framework 或 app | 原作者預期環境 | 多為 Windows | Win32 API、資源檔或外部 DLL |
+| `rationale/`、`samples/` | 以閱讀為主 | 不一定可執行 | 無保證 |
+
 最穩的讀法是：先看檔頭註解、`REQUIRE` 列表、同目錄 README / history / sample，再判斷它是「可重用工具」、「完整應用」、「原型」還是「歷史筆記」。
 
 ---
@@ -330,7 +339,7 @@ find devel/~nn/class -type f | sort
 
 ---
 
-## 3.5 framework / app / prototype 要怎麼讀？
+### 3.5 framework / app / prototype 要怎麼讀？
 
 `devel/` 最容易讓人迷路的不是「不知道有哪些檔」，而是不知道**先開哪個檔**。簡單分：
 

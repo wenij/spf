@@ -4,7 +4,7 @@
 >
 > 如果 `src/` 是 SPF 本體，`ac-lib3/` 更像是 **應用開發時可直接拿來用的函式庫與工具箱**。
 >
-> 如果你還不確定應該先看 `lib/`、`ac-lib3/` 還是 `devel/`，先回 [00-overview.md §2.1a](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md#21a-補充目錄ac-lib3-與-devel) 看三者對照表。
+> 如果你還不確定應該先看 `lib/`、`ac-lib3/` 還是 `devel/`，先回 [00-overview.md §2.1a](00-overview.md#21a-補充目錄ac-lib3-與-devel) 看三者對照表。
 
 ---
 
@@ -311,7 +311,7 @@ ac-lib3/
 1. 目前 SPF session 裡已經有 `REQUIRE` / `REQUIRED`。
 2. `~ac/lib/...` 這類作者路徑能透過 module / library 搜尋路徑找到對應檔案。
 
-### 方式 A：用 SP-Forth 內建的 `INCLUDED`（最直接）
+#### 4.6.1 方式 A：用 SP-Forth 內建的 `INCLUDED`（最直接）
 
 SP-Forth 本體就有 `INCLUDED` / `INCLUDE`，可以直接載入一個 `.f` 檔：
 
@@ -325,7 +325,7 @@ S" ac-lib3/string/regexp.f" INCLUDED
 
 `spf_module.f` 的模組搜尋路徑（見 [05-io-error-init.md](05-io-error-init.md) 的 `+LibraryDirName`）會把相對路徑接到「**可執行檔目錄 + `/devel/`**」之下，因此在某些建構配置裡，`~ac/lib/...` 風格的路徑會被解析到 `devel/~ac/lib/...`（也就是 `ac-lib3/` 的母樹，見 [18-devel.md](18-devel.md)）。
 
-### 方式 B：用 `REQUIRE`（去重 + 路徑慣例）
+#### 4.6.2 方式 B：用 `REQUIRE`（去重 + 路徑慣例）
 
 SPF4 本體已經有 `REQUIRE` / `REQUIRED`，而 `ac-lib3/REQUIRE.F` 則保留了一份早期、獨立的 require 實作。兩者核心概念相同：用一個代表 word 判斷 library 是否已載入，避免重複載入。這也是 `ac-lib3` 內部檔案彼此相依時最常見的寫法：
 
@@ -347,7 +347,7 @@ REQUIRE RG_OpenKey ~ac/lib/win/REGISTRY.F
 
 > **路徑代號小提醒**：`ac-lib3/` 原始檔內部大量使用 `~ac/lib/...`、`~yz/lib/...` 這種「作者路徑代號」。在這個 repo 的實體佈局裡，`~ac/lib/...` 對應的主要是 `devel/~ac/lib/...`（`ac-lib3/` 是整理後的副本）。所以你在範例裡看到 `REQUIRE x ~ac/lib/...`，可以理解成「載入某個 `devel/~ac` 作者母樹下的檔案；而這份 repo 也另外保留了一份整理到 `ac-lib3/` 的副本」。
 
-### 環境前提小抄
+#### 4.6.3 環境前提小抄
 
 使用 `ac-lib3/` 時，最好先把下面幾個前提放在心裡：
 
@@ -358,7 +358,7 @@ REQUIRE RG_OpenKey ~ac/lib/win/REGISTRY.F
 | 作者路徑 | `REQUIRE ... ~ac/lib/...` 通常期待 module/library path 能找到 `devel/~ac/lib/...` |
 | 原檔編碼 | 註解多為 CP1251 俄文，UTF-8 工具直接打開常會看到亂碼 |
 
-### 一個最小可跑的載入流程
+#### 4.6.4 一個最小可跑的載入流程
 
 以「我想用模板字串」為例，在已經能解析 `~ac/lib/...` 路徑的 SPF4 環境裡，完整流程通常是：
 

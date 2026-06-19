@@ -3,7 +3,7 @@
 > 定位：本章補足 `lib/` 目錄與 `spf4e` extended build 的閱讀入口。
 > 如果 `src/` 是系統本體，`lib/` 就是把核心補成較完整使用環境的標準字、工具字與平台延伸集合。
 >
-> 如果你想一次比較 `lib/`、`ac-lib3/`、`devel/` 三者的角色與使用邊界，先看 [00-overview.md §2.1a](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md#21a-補充目錄ac-lib3-與-devel)。
+> 如果你想一次比較 `lib/`、`ac-lib3/`、`devel/` 三者的角色與使用邊界，先看 [00-overview.md §2.1a](00-overview.md#21a-補充目錄ac-lib3-與-devel)。
 
 ---
 
@@ -128,7 +128,7 @@ REQUIRE ANSI-FILE    lib/include/ansi-file.f
 
 也就是說，`DEFER` 比較像「換掉函式入口」，`quotation` 比較像「建立匿名 xt」，`locals` 比較像「改寫 stack 可讀性」；三者用途不同，不要把它們當同一類機制。
 
-實際可跑範例（`CASE` / `DEFER` / `[: ... ;]` / `2CONSTANT` / `FCONSTANT` / `INCLUDE` / `BIN` / `FILE-STATUS` 等）已拆到 [16-lib-cookbook.md §2](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#2-libinclude-可跑範例)。
+實際可跑範例（`CASE` / `DEFER` / `[: ... ;]` / `2CONSTANT` / `FCONSTANT` / `INCLUDE` / `BIN` / `FILE-STATUS` 等）已拆到 [16-lib-cookbook.md §2](16-lib-cookbook.md#2-libinclude-可跑範例)。
 
 ---
 
@@ -157,7 +157,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 - 如果你追的是底層 platform I/O，讀 `src/posix/io.f` 或 `src/win/spf_win_io.f`。
 - 如果你追的是日常 Forth 程式如何用 `S" file" R/O OPEN-FILE`，讀 `lib/include/ansi-file.f`。
 
-完整的 `OPEN-FILE` / `READ-LINE` / `WRITE-FILE` / `BIN` 讀寫範例與常見錯誤對照，已拆到 [16-lib-cookbook.md §3](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#3-ansi-filef-實戰用法)。
+完整的 `OPEN-FILE` / `READ-LINE` / `WRITE-FILE` / `BIN` 讀寫範例與常見錯誤對照，已拆到 [16-lib-cookbook.md §3](16-lib-cookbook.md#3-ansi-filef-實戰用法)。
 
 ---
 
@@ -190,7 +190,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 並且只在 ASCII 範圍做大小寫不敏感，避免破壞 UTF-8。
 
-`caseins.f` / `disasm.f` / `struct.f` / `vocs.f` / `locals.f` / `patch.f` / `onoff.f` / `rnd.f` / `uppercase.f` / `help.f` / `util.f` / `const.f` 的可跑範例，已拆到 [16-lib-cookbook.md §4](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#4-libext-可跑範例)。
+`caseins.f` / `disasm.f` / `struct.f` / `vocs.f` / `locals.f` / `patch.f` / `onoff.f` / `rnd.f` / `uppercase.f` / `help.f` / `util.f` / `const.f` 的可跑範例，已拆到 [16-lib-cookbook.md §4](16-lib-cookbook.md#4-libext-可跑範例)。
 
 其中 `lib/ext/const.f` 很值得特別記住：它不是單純把某個檔案 `INCLUDED` 進來而已，而是**把常數表掛到找字流程裡**。換句話說，`windows.const` / `linux.const` 載入後，`GENERIC_READ` / `O_RDONLY` 這種名字會像一般 word 一樣被找到，最後在編譯期變成 literal。
 
@@ -246,7 +246,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 2. 再決定「檔案 / console 行為來自哪邊」
 3. 最後才決定需不需要碰更低層的 `src/posix/*` / `src/win/*`
 
-`lib/posix/file.f` / `key.f` / `const.f` 的可跑範例與常見小工具，已拆到 [16-lib-cookbook.md §5](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#5-libposix-可跑範例)。
+`lib/posix/file.f` / `key.f` / `const.f` 的可跑範例與常見小工具，已拆到 [16-lib-cookbook.md §5](16-lib-cookbook.md#5-libposix-可跑範例)。
 
 ---
 
@@ -265,7 +265,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 | `lib/win/const.f` | 載入 Windows API 常數表（`windows.const`） |
 | `lib/win/winconst/` | 產生 / 保存 Windows 常數表 |
 
-`lib/win/api-call/` 裡的 `capi.f` / `capi2.f` / `altwinapi.f` 是比較低層的呼叫封裝實驗。一般閱讀 Windows FFI 主線時，先讀 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`；需要比較替代呼叫模型時，再回來看這裡。
+`lib/win/api-call/` 裡的 `capi.f` / `capi2.f` / `altwinapi.f` 是比較低層的呼叫封裝實驗。一般閱讀 Windows FFI 主線時，先讀 [09-windows-platform.md](09-windows-platform.md) 的 `WINAPI:` / `API-CALL`；需要比較替代呼叫模型時，再回來看這裡。
 
 可以用一條線把三者分清楚：
 
@@ -290,7 +290,7 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 如果你只是想把 `WINAPI:` 宣告寫得比較順手、拿到 `GENERIC_READ` / `FILE_SHARE_READ` 這類常數、再補一點檔案 / mutex / error helper，`lib/win/` 通常夠用；只有當你需要 registry / COM / Winsock / ODBC / service 這類較厚的整合時，才升級到 `ac-lib3/win/`。
 
-`lib/win/file.f` / `mutex.f` / `osver.f` / `winerr.f` / `const.f` 與 `api-call/`、`spfgui/` 的可跑範例，已拆到 [16-lib-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/16-lib-cookbook.md#6-libwin-可跑範例)。
+`lib/win/file.f` / `mutex.f` / `osver.f` / `winerr.f` / `const.f` 與 `api-call/`、`spfgui/` 的可跑範例，已拆到 [16-lib-cookbook.md §6](16-lib-cookbook.md#6-libwin-可跑範例)。
 
 ---
 
@@ -310,11 +310,11 @@ SP-Forth kernel 的底層 file words 傾向期待檔名字串結尾已經有 `0`
 
 ## 9. 與其它 trace 章節的關係
 
-- `src/` 主系統如何載入與建構，先看 [00-overview.md](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md) 與 [06-build-save.md](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md)。
-- compiler / `INCLUDED` / `REQUIRE` 的核心行為，先看 [02-compiler.md](file:///Users/wenij/work/forth/spf/docs/trace/02-compiler.md)。
-- POSIX / Windows 平台本體，分別看 [04-posix-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/04-posix-platform.md) 與 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md)。
-- `ac-lib3/` 是另一組較大的延伸函式庫，見 [17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md)。
-- `devel/` 是作者工作區與歷史原型集合，見 [18-devel.md](file:///Users/wenij/work/forth/spf/docs/trace/18-devel.md)。
+- `src/` 主系統如何載入與建構，先看 [00-overview.md](00-overview.md) 與 [06-build-save.md](06-build-save.md)。
+- compiler / `INCLUDED` / `REQUIRE` 的核心行為，先看 [02-compiler.md](02-compiler.md)。
+- POSIX / Windows 平台本體，分別看 [04-posix-platform.md](04-posix-platform.md) 與 [09-windows-platform.md](09-windows-platform.md)。
+- `ac-lib3/` 是另一組較大的延伸函式庫，見 [17-ac-lib3.md](17-ac-lib3.md)。
+- `devel/` 是作者工作區與歷史原型集合，見 [18-devel.md](18-devel.md)。
 
 ---
 
@@ -339,7 +339,7 @@ src/posix/io.f           ← POSIX 平台 I/O
 spf4  ← 已可用，但只有最基本核心
 ```
 
-建構細節見 [06-build-save.md](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md)。在 Linux 上是 `cd src && make`；在 Windows 上是 `src/compile.bat`。
+建構細節見 [06-build-save.md](06-build-save.md)。在 Linux 上是 `cd src && make`；在 Windows 上是 `src/compile.bat`。
 
 ### 10.2 階段二：用 `spf4` 載入 `lib/ext/spf4e.f` 產出 `spf4e`
 
@@ -426,7 +426,7 @@ synonym filename-existent file-exists   \ 把 FILE-EXIST 別名成 filename-exis
 3. 把 `2 3 + .` 與 `bye` 當作 input 餵給直譯器（每個空白分隔的 token 依序執行）。
 4. 印出 `5`，然後 `BYE` 結束。
 
-> 也可以 `S" myapp.fth" INCLUDED` 寫在程式內部，再用 SAVE 包成可獨立執行檔（見 [15-standalone-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/15-standalone-cookbook.md)）。
+> 也可以 `S" myapp.fth" INCLUDED` 寫在程式內部，再用 SAVE 包成可獨立執行檔（見 [15-standalone-cookbook.md](15-standalone-cookbook.md)）。
 
 ### 10.5 為什麼分階段？
 
@@ -473,7 +473,7 @@ synonym filename-existent file-exists   \ 把 FILE-EXIST 別名成 filename-exis
 
 - 日常商業 / 工具類程式 → 優先用 `lib/`。
 - 需要 `~ac` 風格特性（如 `STR2.F` 模板字串、`LOCALS.F`）→ 引入 `ac-lib3/` 對應檔案。
-- 大型應用 / prototype → 看 [17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md) 找對應功能。
+- 大型應用 / prototype → 看 [17-ac-lib3.md](17-ac-lib3.md) 找對應功能。
 
 `lib/ext/spf4e.f` 另外做了一件重要的事：它會改寫 `find-fullname`，讓 `./...` 類路徑改成**相對目前 source-basepath** 解析，而不是單純相對啟動目錄。這對多檔案工程很重要，因為：
 
@@ -518,7 +518,7 @@ synonym filename-existent file-exists   \ 把 FILE-EXIST 別名成 filename-exis
 
 ### 11.6 與其它章節的交叉點
 
-- `lib/` 的 include 機制（`REQUIRE` / `INCLUDE`）底層行為見 [02-compiler.md §15](file:///Users/wenij/work/forth/spf/docs/trace/02-compiler.md#15-模組載入spf_modulesf深入解析)。
-- `spf4e` 的 build 流程見 [00-overview.md §2.2](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md) 與 [06-build-save.md](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md)。
+- `lib/` 的 include 機制（`REQUIRE` / `INCLUDE`）底層行為見 [02-compiler.md §15](02-compiler.md#15-模組載入spf_modulesf深入解析)。
+- `spf4e` 的 build 流程見 [00-overview.md §2.2](00-overview.md) 與 [06-build-save.md](06-build-save.md)。
 - 想了解 `spf4` 與 `spf4e` 內部結構差異，看 `src/spf_init.f` 中 `MAINX` / `SPF-INIT?` 的初始化分支。
-- `ac-lib3/` 與 `lib/` 怎麼選擇，看 [00-overview.md](file:///Users/wenij/work/forth/spf/docs/trace/00-overview.md) 的「延伸函式庫」段落。
+- `ac-lib3/` 與 `lib/` 怎麼選擇，看 [00-overview.md](00-overview.md) 的「延伸函式庫」段落。

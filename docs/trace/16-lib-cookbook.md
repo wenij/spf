@@ -1,6 +1,6 @@
 # SP-Forth/4 原始碼追蹤 — `lib/` 使用索引與可跑範例
 
-> 定位：本章是 [16-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/16-lib.md) 的配套 cookbook。
+> 定位：本章是 [16-lib.md](16-lib.md) 的配套 cookbook。
 > 主章負責說明 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略；本章則回答「我想直接用 `lib/` 的某個 word / 某個檔案，怎麼載、怎麼用、有什麼前提」。
 
 ---
@@ -14,7 +14,27 @@
 | 你是在 `spf4` 還是 `spf4e` | `spf4e` 已經內建大部分 `lib/include/ansi.f` 與 `lib/ext/spf4e.f` 的內容；在純 `spf4` 下則要手動 include |
 | 是否已載入 `lib/include/ansi.f` | `CASE` / `DEFER` / `INCLUDE` / `BIN` / `FILE-STATUS` 等 convenience 主要由 `ansi.f` 串起來 |
 | 平台是 POSIX 還是 Windows | `lib/posix/` 與 `lib/win/` 會走不同實作；名稱可能相同、行為不同 |
-| 你要的是「基礎補齊」還是「大型工具箱」 | 如果需求是 registry / COM / ODBC / regex / MIME / template string，多半還是要回 [17-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3-cookbook.md) |
+| 你要的是「基礎補齊」還是「大型工具箱」 | 如果需求是 registry / COM / ODBC / regex / MIME / template string，多半還是要回 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md) |
+
+範例驗證狀態：
+
+| 範圍 | 建議環境 | 平台 | 外部依賴 |
+|------|----------|------|----------|
+| `lib/include/`、`lib/ext/` | `spf4e`，或 `spf4` 先載入指定 include | POSIX / Windows | 無 |
+| `lib/posix/` | `spf4e` 或 `spf4 + lib/include/ansi.f` | POSIX only | 終端機範例需 tty |
+| `lib/win/` | Windows 版 SP-Forth | Windows only | Win32 DLL / system API |
+| `api-call/` C API 範例 | Windows 版 SP-Forth | Windows only | `msvcrt.dll` |
+
+本章快速目錄：
+
+| 章節 | 內容 | 平台 |
+|------|------|------|
+| §2 | `lib/include/` 常用 word set | POSIX / Windows |
+| §3 | `ansi-file.f` 檔案 I/O | POSIX / Windows |
+| §4 | `lib/ext/` 工具字 | POSIX / Windows |
+| §5 | `lib/posix/` | POSIX only |
+| §6 | `lib/win/` | Windows only |
+| §7-§9 | 載入組合、依賴選擇與回讀路徑 | POSIX / Windows |
 
 最保守的做法：
 
@@ -391,7 +411,7 @@ GOLDEN FS. CR
 - 金額、計數、檔案 offset 這類需要 **精確整數** 的資料，不要用 float，改用 `double.f`
 - 幾何、比例、平均值、量測值這類接受誤差的資料，才用 `float2.f`
 
-> `F.` / `FS.` 是 day 9.03.2005 加入的高階輸出；`F.` 預設 6 位、`FS.` 採整數表示法。`REPRESENT` 與底層 pad 由 `~yGREK` 重構。對應 Forth 標準語意上，`FCONSTANT` / `FVARIABLE` / `FVALUE` 都屬於 optional floating-point word set。 
+> `F.` / `FS.` 是 day 9.03.2005 加入的高階輸出；`F.` 預設 6 位、`FS.` 採整數表示法。`REPRESENT` 與底層 pad 由 `~yGREK` 重構。對應 Forth 標準語意上，`FCONSTANT` / `FVARIABLE` / `FVALUE` 都屬於 optional floating-point word set。
 
 ### 2.11 對齊（alignment）與 float / double 的記憶體配置
 
@@ -481,13 +501,13 @@ REQUIRE [: lib/include/quotations.f
 `ansi.f` 除了把上述 include 串起來，還順便補上幾個常見的便利 word：
 
 ```forth
-REQUIRE lib/include/ansi.f
+S" lib/include/ansi.f" INCLUDED
 
 \ INCLUDE：支援解析名稱的 INCLUDED
 INCLUDE my-source.f    \ 等同 S" my-source.f" INCLUDED
 
 \ BIN：fam flag 給 file access mode 加 binary 標記（POSIX 上是 identity）
-S" data.bin" R/W BIN OPEN-FILE
+S" data.bin" R/W BIN OPEN-FILE THROW CLOSE-FILE THROW
 
 \ FILE-STATUS：把 FILE-EXIST 轉成標準 ( x ior ) 形式
 S" data.bin" FILE-STATUS  . .   \ 0 0 表示檔案存在、無錯誤
@@ -508,30 +528,27 @@ S" data.bin" FILE-STATUS  . .   \ 0 0 表示檔案存在、無錯誤
 | 內部 buffer | 無 | 動態配置 `PFILENAME`，size 隨用過的最大檔名成長 |
 | `READ-FILE` 與 `WRITE-FILE` | 同樣只看 ASCIIZ | 包裝為 `c-addr u` 形式 |
 
-> 結論：在 `spf4e` 或已 `REQUIRE lib/include/ansi.f` 的環境下，**永遠用 `c-addr u` 形式**寫檔案 I/O；kernel 內部的 ASCIIZ 形式保留是為底層相容性。
+> 結論：在 `spf4e` 或已載入 `lib/include/ansi.f` / `lib/include/ansi-file.f` 的環境下，**永遠用 `c-addr u` 形式**寫檔案 I/O；kernel 內部的 ASCIIZ 形式保留是為底層相容性。
 
 ### 3.2 完整讀檔範例：行讀直到 EOF
 
 ```forth
-REQUIRE ANSI-FILE lib/include/ansi.f
+REQUIRE ANSI-FILE lib/include/ansi-file.f
 
 CREATE LINE-BUF  1024 CHARS ALLOT
 
 : PROCESS-LINE ( c-addr u -- )  TYPE CR ;
 
 : READ-ALL-LINES ( c-addr u -- )
-  R/O OPEN-FILE THROW  ( fileid )
+  R/O OPEN-FILE THROW >R
   BEGIN
-    LINE-BUF 1024  ( c-addr maxlen )
-    2 PICK READ-LINE ( c-addr u flag ior fileid )
+    LINE-BUF 1024 R@ READ-LINE THROW  ( u2 flag )
   WHILE
-    ( -- c-addr u flag ior fileid )  \ 還沒到 EOF
-    ROT DROP  2SWAP 2DROP              \ 丟 flag 與 ior，剩 ( c-addr u )
+    LINE-BUF SWAP
     PROCESS-LINE
   REPEAT
-  ( c-addr u flag ior fileid )
-  2DROP 2DROP  DROP                   \ 清乾淨
-  CLOSE-FILE THROW
+  DROP
+  R> CLOSE-FILE THROW
 ;
 
 S" mydata.txt" READ-ALL-LINES
@@ -543,10 +560,9 @@ S" mydata.txt" READ-ALL-LINES
 
 ```forth
 : WRITE-STRING-TO ( c-addr u filename-c-addr filename-u -- )
-  W/O CREATE-FILE THROW  ( fileid c-addr u )
-  2SWAP                  ( filename-c-addr filename-u fileid c-addr u )
-  WRITE-FILE THROW        ( filename-c-addr filename-u fileid ior )
-  2DROP  CLOSE-FILE THROW
+  W/O CREATE-FILE THROW >R
+  R@ WRITE-FILE THROW
+  R> CLOSE-FILE THROW
 ;
 
 S" Hello, world!" S" greeting.txt" WRITE-STRING-TO
@@ -559,8 +575,8 @@ S" Hello, world!" S" greeting.txt" WRITE-STRING-TO
 ```forth
 : WRITE-BINARY ( c-addr u filename-c-addr filename-u -- )
   W/O BIN CREATE-FILE THROW  >R
-  2SWAP R> WRITE-FILE THROW
-  CLOSE-FILE THROW
+  R@ WRITE-FILE THROW
+  R> CLOSE-FILE THROW
 ;
 
 \ 把 buffer 寫成 raw bytes
@@ -571,7 +587,7 @@ HERE 100  S" data.bin" WRITE-BINARY
 
 | 症狀 | 原因 | 修正 |
 |------|------|------|
-| `OPEN-FILE` 沒讀完整檔名 | 載入 ansi 之前用 ASCIIZ 寫法 | `REQUIRE lib/include/ansi.f` |
+| `OPEN-FILE` 沒讀完整檔名 | 載入 ansi 之前用 ASCIIZ 寫法 | `S" lib/include/ansi.f" INCLUDED` 或 `REQUIRE ANSI-FILE lib/include/ansi-file.f` |
 | 寫檔出現 garbage | 沒 flush / `WRITE-FILE` 只寫部分 | loop 到 `WRITE-FILE` 全部寫完才關 |
 | 跨平台 line ending 不一致 | `READ-LINE` 在 Windows 可能吃 `\r\n` | 視需求手動 `S\" \r\n"` 過濾 |
 | 大檔一次讀爆 buffer | `READ-FILE` 不切 chunk | 改用 `READ-LINE` 或 loop 讀固定 size |
@@ -959,6 +975,8 @@ REMOVE-ALL-CONSTANTS
 
 ### 5.1 自動載入：`RENAME-FILE` 走 POSIX 路徑
 
+> 平台：POSIX only。Windows 下請看 §6 的 `lib/win/file.f`。
+
 在 `spf4e` 或 `spf4 + lib/include/ansi.f` 環境下，呼叫 `RENAME-FILE` 會走 `lib/posix/file.f`：
 
 ```forth
@@ -1009,6 +1027,8 @@ O_CREAT   .        \ 印出 O_CREAT 的數值
 ## 6. `lib/win/` 可跑範例
 
 ### 6.1 `lib/win/file.f` — 額外的檔案工具
+
+> 平台：Windows only。POSIX 下請看 §5 的 `lib/posix/file.f`。
 
 `lib/win/file.f` 提供 `RENAME-FILE` / `TOEND-FILE` / `COPY-FILE` / `COPY-FILE-OVER` / `DELETE-FOLDER` 等高階檔案工具，底層呼叫 `MoveFileA` / `CopyFileA` / `RemoveDirectoryA`：
 
@@ -1113,7 +1133,7 @@ GENERIC_READ  GENERIC_WRITE  OR  .  \ 印出組合後的 access mask
 | `capi2.f` | 簡化版 C-style API call |
 | `altwinapi.f` | 替代 `WINAPI:` 與 `API-CALL` 的封裝 |
 
-除非要在 `spf4`（無 `WINAPI:`）下做 Win32 開發，否則主線仍走 [09-windows-platform.md](file:///Users/wenij/work/forth/spf/docs/trace/09-windows-platform.md) 的 `WINAPI:` / `API-CALL`。
+除非要在 `spf4`（無 `WINAPI:`）下做 Win32 開發，否則主線仍走 [09-windows-platform.md](09-windows-platform.md) 的 `WINAPI:` / `API-CALL`。
 
 最小可跑的 `CAPI:` 例子其實就在原始檔註解裡：
 
@@ -1169,7 +1189,7 @@ FILE_SHARE_READ FILE_SHARE_WRITE OR . CR
 
 ### 6.8 `lib/win/spfgui/` — SP-Forth GUI 支援
 
-`spfgui` 是 SP-Forth 的傳統 GUI 工具箱雛形，包含 button、edit、list 等控制項包裝。現代 GUI 開發建議參考 `ac-lib3/win/window/`（[17-ac-lib3.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3.md)）。
+`spfgui` 是 SP-Forth 的傳統 GUI 工具箱雛形，包含 button、edit、list 等控制項包裝。現代 GUI 開發建議參考 `ac-lib3/win/window/`（[17-ac-lib3.md](17-ac-lib3.md)）。
 
 ---
 
@@ -1197,15 +1217,15 @@ FILE_SHARE_READ FILE_SHARE_WRITE OR . CR
 | 字串模板 / regex / MIME |  | ✅ |
 | Windows registry / COM / ODBC / Winsock |  | ✅ |
 | trace / instrumentation / hot patch |  | ✅ |
-| 大型作者實驗 / framework / 範例 |  | 回 [18-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/18-devel-cookbook.md) |
+| 大型作者實驗 / framework / 範例 |  | 回 [18-devel-cookbook.md](18-devel-cookbook.md) |
 
-更完整的三方對照見 [18-devel-cookbook.md §6](file:///Users/wenij/work/forth/spf/docs/trace/18-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 與 [17-ac-lib3-cookbook.md §7](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3-cookbook.md#7-與-lib-devel-的對照)。
+更完整的三方對照見 [18-devel-cookbook.md §6](18-devel-cookbook.md#6-延伸函式庫使用對照lib-vs-ac-lib3-vs-devel) 與 [17-ac-lib3-cookbook.md §7](17-ac-lib3-cookbook.md#7-與-lib-devel-的對照)。
 
 ---
 
 ## 9. 讀完後回到哪裡？
 
-- 想理解 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略，回 [16-lib.md](file:///Users/wenij/work/forth/spf/docs/trace/16-lib.md)。
-- 想找 Windows registry / COM / Winsock / ODBC 等進階整合，回 [17-ac-lib3-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/17-ac-lib3-cookbook.md)。
-- 想找作者子樹的 prototype / framework / 大型範例，回 [18-devel-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/18-devel-cookbook.md)。
-- 想理解 `spf4` / `spf4e` 的 build 與 image save，回 [06-build-save.md](file:///Users/wenij/work/forth/spf/docs/trace/06-build-save.md) 與 [15-standalone-cookbook.md](file:///Users/wenij/work/forth/spf/docs/trace/15-standalone-cookbook.md)。
+- 想理解 `lib/` 的角色、`spf4` / `spf4e` build flow 與載入策略，回 [16-lib.md](16-lib.md)。
+- 想找 Windows registry / COM / Winsock / ODBC 等進階整合，回 [17-ac-lib3-cookbook.md](17-ac-lib3-cookbook.md)。
+- 想找作者子樹的 prototype / framework / 大型範例，回 [18-devel-cookbook.md](18-devel-cookbook.md)。
+- 想理解 `spf4` / `spf4e` 的 build 與 image save，回 [06-build-save.md](06-build-save.md) 與 [15-standalone-cookbook.md](15-standalone-cookbook.md)。

@@ -16,6 +16,15 @@
 | 是否在 Windows/Win32 環境 | `win/`、`memory/`、`tools/` 大量直接呼叫 Windows DLL |
 | 外部 DLL 是否存在 | regexp、bregexp、zlib 等 wrapper 需要對應 DLL |
 
+範例驗證狀態：
+
+| 範圍 | 建議環境 | 平台 | 外部依賴 |
+|------|----------|------|----------|
+| `LOCALS.F` / `TEMPS.F` / `STR*.F` | `spf4` 或 `spf4e`，且可解析 `~ac/lib/...` | POSIX / Windows | 無 |
+| `string/regexp.f` / `bregexp` / zlib | Windows 版 SP-Forth 較常見 | 多為 Windows | `pcre.dll`、`BREGEXP.DLL`、`zlib.dll` 等 |
+| `win/` family | Windows 版 SP-Forth | Windows only | Win32 DLL / COM / ODBC / Winsock |
+| `debug/` / `tools/` | 依檔案而定 | 多為 Windows，少部分可跨平台 | 需看檔頭 `REQUIRE` |
+
 最保守的讀法是：先看目標檔案開頭的 `REQUIRE` 列表，再決定載入順序。若環境已能解析 `~ac/lib/...`，通常直接載入目標檔案即可。
 
 ```forth
@@ -478,6 +487,8 @@ ReduceMem
 ---
 
 ## 5. Windows 系統整合
+
+> 平台：Windows only。這一節多數範例會呼叫 Win32 DLL、COM、ODBC、Winsock 或 registry API。
 
 ### `win/registry2.f` / `win/REGISTRY.F`
 
